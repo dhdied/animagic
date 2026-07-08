@@ -54,8 +54,8 @@ const dirLight = new THREE.DirectionalLight(0xb4befe, 0.8);
 dirLight.position.set(0.5, 1, 0.5);
 scene3d.add(dirLight);
 
-const camera3d = new THREE.OrthographicCamera(0, 1, 1, 0, 0.1, 1000);
-camera3d.position.set(0, 0, 10);
+const camera3d = new THREE.OrthographicCamera(0, 1, 1, 0, 0.1, 3000);
+camera3d.position.set(0, 0, 1000);
 camera3d.lookAt(0, 0, 0);
 
 const fbxLoader = new FBXLoader();
