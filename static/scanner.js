@@ -1,144 +1,212 @@
-const EMOJI = { goldfish: "🐠", tropical: "🐡", shark: "🦈" };
-
-const speciesGrid = document.getElementById("speciesGrid");
-const cameraBox = document.getElementById("cameraBox");
-const cameraPlaceholder = document.getElementById("cameraPlaceholder");
-const startCameraBtn = document.getElementById("startCameraBtn");
 const chooseFileBtn = document.getElementById("chooseFileBtn");
-const fileInput = document.getElementById("fileInput");
 const captureBtn = document.getElementById("captureBtn");
 const statusBox = document.getElementById("status");
+const uploadText = document.getElementById("uploadText");
+const burgerBtn = document.getElementById("burgerBtn");
+const instructionsPanel = document.getElementById("instructionsPanel");
 
-let selectedSpecies = null;
-let videoEl = null;
-let stream = null;
+// Элементы модального окна и инпуты
+const uploadModal = document.getElementById("uploadModal");
+const btnCamera = document.getElementById("btnCamera");
+const btnGallery = document.getElementById("btnGallery");
+const btnCancel = document.getElementById("btnCancel");
+const cameraInput = document.getElementById("cameraInput");
+const galleryInput = document.getElementById("galleryInput");
+
 let capturedBlob = null;
+let defaultSpecies = "goldfish";
+let statusTimeout = null;
 
-function setStatus(kind, text) {
-  statusBox.className = "status show " + kind;
-  statusBox.textContent = text;
-}
-function clearStatus() {
-  statusBox.className = "status";
-  statusBox.textContent = "";
-}
-
-function refreshSendButton() {
-  captureBtn.disabled = !(selectedSpecies && capturedBlob);
-}
-
-async function loadSpecies() {
-  const res = await fetch("/api/species");
-  const data = await res.json();
-  speciesGrid.innerHTML = "";
-  Object.entries(data).forEach(([key, meta], i) => {
-    const card = document.createElement("button");
-    card.type = "button";
-    card.className = "species-card";
-    card.innerHTML = `<span class="emoji">${EMOJI[key] || "🐟"}</span>${meta.label}`;
-    card.addEventListener("click", () => {
-      document.querySelectorAll(".species-card").forEach((c) => c.classList.remove("selected"));
-      card.classList.add("selected");
-      selectedSpecies = key;
-      refreshSendButton();
-    });
-    speciesGrid.appendChild(card);
-    if (i === 0) card.click();
-  });
-}
-
-async function startCamera() {
-  try {
-    stream = await navigator.mediaDevices.getUserMedia({
-      video: { facingMode: "environment", width: { ideal: 1280 }, height: { ideal: 960 } },
-      audio: false,
-    });
-  } catch (err) {
-    setStatus("err", "Не удалось включить камеру. Загрузи фото кнопкой ниже.");
-    return;
+// === ЛОГИКА ОТОБРАЖЕНИЯ СТАТУСОВ ===
+function showStatus(message, type) {
+  if (statusTimeout) {
+    clearTimeout(statusTimeout);
   }
-  cameraPlaceholder.style.display = "none";
-  cameraBox.innerHTML = "";
-  videoEl = document.createElement("video");
-  videoEl.autoplay = true;
-  videoEl.playsInline = true;
-  videoEl.srcObject = stream;
-  cameraBox.appendChild(videoEl);
-  startCameraBtn.textContent = "📸 Снять кадр";
-  startCameraBtn.onclick = takeSnapshot;
+  
+  statusBox.textContent = message;
+  statusBox.className = `status show ${type}`;
+  
+  statusTimeout = setTimeout(() => {
+    hideStatus();
+  }, 7000);
 }
 
-function takeSnapshot() {
-  if (!videoEl) return;
-  const canvas = document.createElement("canvas");
-  canvas.width = videoEl.videoWidth;
-  canvas.height = videoEl.videoHeight;
-  canvas.getContext("2d").drawImage(videoEl, 0, 0);
-  canvas.toBlob((blob) => {
-    capturedBlob = blob;
-    cameraBox.innerHTML = "";
-    const img = document.createElement("img");
-    img.src = URL.createObjectURL(blob);
-    cameraBox.appendChild(img);
-    refreshSendButton();
-    clearStatus();
-  }, "image/jpeg", 0.92);
-
-  if (stream) stream.getTracks().forEach((t) => t.stop());
-  startCameraBtn.textContent = "📷 Включить камеру";
-  startCameraBtn.onclick = startCamera;
+function hideStatus() {
+  statusBox.className = "status";
 }
 
-startCameraBtn.addEventListener("click", startCamera);
-
-chooseFileBtn.addEventListener("click", () => fileInput.click());
-fileInput.addEventListener("change", () => {
-  const file = fileInput.files[0];
-  if (!file) return;
-  capturedBlob = file;
-  cameraPlaceholder.style.display = "none";
-  cameraBox.innerHTML = "";
-  const img = document.createElement("img");
-  img.src = URL.createObjectURL(file);
-  cameraBox.appendChild(img);
-  refreshSendButton();
-  clearStatus();
+// === ЛОГИКА МЕНЮ-БУРГЕРА ===
+burgerBtn.addEventListener("click", () => {
+  instructionsPanel.classList.toggle("open");
 });
 
+// === ЛОГИКА МОДАЛЬНОГО ОКНА ВЫБОРА ===
+// Открываем модалку при клике на черную кнопку
+chooseFileBtn.addEventListener("click", () => {
+  uploadModal.classList.add("active");
+});
+
+// Закрываем модалку по кнопке "Отмена"
+btnCancel.addEventListener("click", () => {
+  uploadModal.classList.remove("active");
+});
+
+// Закрываем модалку при клике на размытый фон (вне окна)
+uploadModal.addEventListener("click", (e) => {
+  if (e.target === uploadModal) {
+    uploadModal.classList.remove("active");
+  }
+});
+
+// Клик по "Сделать фото" -> триггерим инпут камеры
+btnCamera.addEventListener("click", () => {
+  cameraInput.click();
+  uploadModal.classList.remove("active");
+});
+
+// Клик по "Галерея" -> триггерим инпут галереи
+btnGallery.addEventListener("click", () => {
+  galleryInput.click();
+  uploadModal.classList.remove("active");
+});
+
+// === ОБРАБОТКА ВЫБРАННОГО ФАЙЛА (ДЛЯ ОБОИХ ИНПУТОВ) ===
+function handleFileSelection(event) {
+  const file = event.target.files[0];
+  if (!file) return;
+  
+  capturedBlob = file;
+  
+  uploadText.textContent = "Фото выбрано";
+  uploadText.style.color = "#fff"; 
+  captureBtn.disabled = false;
+  hideStatus();
+  
+  // Очищаем value, чтобы можно было выбрать тот же файл еще раз, если нужно
+  event.target.value = ""; 
+}
+
+cameraInput.addEventListener("change", handleFileSelection);
+galleryInput.addEventListener("change", handleFileSelection);
+
+// === ОТПРАВКА НА СЕРВЕР ===
 captureBtn.addEventListener("click", async () => {
-  if (!selectedSpecies || !capturedBlob) return;
+  if (!capturedBlob) return;
+  
   captureBtn.disabled = true;
-  setStatus("busy", "Ищу рамку и вырезаю рыбку… 🔍");
+  showStatus("Ищу рамку и вырезаю рыбку... 🔍", "loading");
 
   const form = new FormData();
   form.append("photo", capturedBlob, "photo.jpg");
-  form.append("species", selectedSpecies);
+  form.append("species", defaultSpecies);
 
   try {
     const res = await fetch("/api/scan", { method: "POST", body: form });
+    
     if (res.status === 422) {
-      const err = await res.json();
-      setStatus("err", "Рамку не видно целиком на фото. Сфотографируй ровнее и попробуй снова.");
-      refreshSendButton();
+      showStatus("Рамку не видно целиком. Попробуй снова.", "error");
+      captureBtn.disabled = false;
       return;
     }
+    
     if (!res.ok) throw new Error("server error");
+    
     const data = await res.json();
+    
     if (data.walls_notified === 0) {
-      setStatus("ok", "Рыбка готова, но ни один экран сейчас не подключён 🐠");
+      showStatus("🐠 Готово, но экраны не подключены.", "success");
     } else {
-      setStatus("ok", "Рыбка уже плывёт на стене! 🌊");
+      showStatus("🌊 Рыбка уже плывет на стене!", "success");
     }
+    
     capturedBlob = null;
-    cameraBox.innerHTML = "";
-    cameraPlaceholder.style.display = "block";
-    cameraPlaceholder.textContent = "Нажми «Включить камеру» или загрузи фото";
-    cameraBox.appendChild(cameraPlaceholder);
+    uploadText.textContent = "Загрузка изображения";
+    uploadText.style.color = "#999";
+    
   } catch (err) {
-    setStatus("err", "Не получилось отправить рыбку. Проверь соединение и попробуй снова.");
-  } finally {
-    refreshSendButton();
+    showStatus("Ошибка соединения. Проверь сеть.", "error");
+    captureBtn.disabled = false;
   }
 });
 
-loadSpecies();
+// ==========================================
+// ФОНОВЫЕ РЫБКИ (ПЛАВНАЯ АНИМАЦИЯ)
+// ==========================================
+const bgCanvas = document.getElementById("bgCanvas");
+const ctx = bgCanvas.getContext("2d");
+
+let canvasWidth, canvasHeight;
+
+function resizeCanvas() {
+  canvasWidth = bgCanvas.width = window.innerWidth;
+  canvasHeight = bgCanvas.height = window.innerHeight;
+}
+window.addEventListener("resize", resizeCanvas);
+resizeCanvas();
+
+const fishCount = 24; 
+const fishes = [];
+
+for (let i = 0; i < fishCount; i++) {
+  fishes.push({
+    x: Math.random() * canvasWidth,
+    y: Math.random() * canvasHeight,
+    angle: Math.random() * Math.PI * 2, 
+    speed: 0.4 + Math.random() * 0.5,   
+    size: 0.7 + Math.random() * 0.5,    
+    offset: Math.random() * 100         
+  });
+}
+
+let time = 0;
+
+function animateBackground() {
+  ctx.clearRect(0, 0, canvasWidth, canvasHeight);
+  time += 0.05;
+
+  fishes.forEach(f => {
+    f.angle += (Math.random() - 0.5) * 0.015;
+
+    f.x += Math.cos(f.angle) * f.speed;
+    f.y += Math.sin(f.angle) * f.speed;
+
+    if (f.x < -100) f.x = canvasWidth + 100;
+    if (f.x > canvasWidth + 100) f.x = -100;
+    if (f.y < -100) f.y = canvasHeight + 100;
+    if (f.y > canvasHeight + 100) f.y = -100;
+
+    ctx.save();
+    ctx.translate(f.x, f.y);
+    ctx.rotate(f.angle);
+    ctx.scale(f.size, f.size);
+
+    ctx.strokeStyle = "rgba(160, 160, 170, 0.25)"; 
+    ctx.lineWidth = 2;
+    ctx.lineCap = "round";
+    ctx.lineJoin = "round";
+
+    ctx.beginPath();
+    ctx.moveTo(15, 0); 
+    ctx.quadraticCurveTo(0, -10, -15, 0); 
+    ctx.quadraticCurveTo(0, 10, 15, 0);   
+
+    const tailWobble = Math.sin(time * f.speed + f.offset) * 5;
+
+    ctx.moveTo(-15, 0);
+    ctx.lineTo(-26, -8 + tailWobble);
+    ctx.lineTo(-20, 0);
+    ctx.lineTo(-26, 8 + tailWobble);
+    ctx.closePath(); 
+
+    ctx.moveTo(-2, -8);
+    ctx.lineTo(-6, -14);
+    ctx.lineTo(-10, -6);
+
+    ctx.stroke();
+    ctx.restore();
+  });
+  
+  requestAnimationFrame(animateBackground);
+}
+
+animateBackground();

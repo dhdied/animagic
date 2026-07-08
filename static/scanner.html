@@ -3,168 +3,368 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<title>Сканер рыбки — Fish Wall</title>
-<link rel="stylesheet" href="/static/style.css">
+<title>Сканер рыбки — Анимагия</title>
 <style>
   body {
-    background:
-      radial-gradient(1200px 800px at 50% -10%, #0d3b52 0%, transparent 60%),
-      linear-gradient(180deg, var(--deep) 0%, #062038 100%);
-    min-height: 100%;
-    padding-bottom: 40px;
+    margin: 0;
+    padding: 0;
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    background: linear-gradient(180deg, #f2f2f4 0%, #e5e5e8 100%); 
+    font-family: system-ui, -apple-system, sans-serif;
+    color: #111;
   }
 
-  .wrap { max-width: 480px; margin: 0 auto; padding: 20px 18px 60px; }
-
-  header.hero { text-align: center; padding: 18px 0 10px; }
-  header.hero h1 {
-    font-family: var(--font-display);
-    font-weight: 800;
-    font-size: clamp(28px, 8vw, 38px);
-    margin: 6px 0 4px;
-    letter-spacing: 0.5px;
+  /* === ХОЛСТ ДЛЯ ФОНОВЫХ РЫБОК === */
+  #bgCanvas {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    z-index: 1;
+    pointer-events: none;
   }
-  header.hero p { margin: 0; opacity: 0.8; font-size: 15px; }
+
+  .logo-container {
+    text-align: center;
+    margin-bottom: 40px;
+    position: relative;
+    z-index: 10; 
+  }
+
+  .main-logo {
+    width: 180px; 
+    height: auto;
+    margin-bottom: 15px;
+  }
+
+  .controls-row {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 12px;
+    width: 90%;
+    max-width: 440px;
+    position: relative;
+    z-index: 10;
+  }
+
+  .burger-btn {
+    width: 60px;
+    height: 60px;
+    background-color: #0d0d0f;
+    border-radius: 50%;
+    border: none;
+    color: #fff;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.1);
+    transition: transform 0.2s;
+    flex-shrink: 0;
+  }
+
+  .burger-btn:active {
+    transform: scale(0.92);
+  }
+
+  .action-bar {
+    display: flex;
+    align-items: center;
+    flex: 1;
+  }
+
+  .upload-btn {
+    flex: 1;
+    display: flex;
+    align-items: center;
+    justify-content: flex-start;
+    padding-left: 20px;
+    padding-right: 35px;
+    gap: 12px;
+    background-color: #0d0d0f;
+    border-radius: 30px 0 0 30px;
+    border: none;
+    color: #999;
+    font-size: 15px;
+    height: 60px;
+    cursor: pointer;
+    outline: none;
+    -webkit-mask-image: radial-gradient(circle 36px at right center, transparent 36px, black 37px);
+    mask-image: radial-gradient(circle 36px at right center, transparent 36px, black 37px);
+  }
+
+  .submit-btn {
+    background-color: #128c7e;
+    border: none;
+    border-radius: 30px;
+    width: 80px;
+    height: 60px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    transition: opacity 0.2s, transform 0.1s;
+    box-shadow: 0 8px 24px rgba(18, 140, 126, 0.25);
+    margin-left: -30px; 
+    position: relative;
+    z-index: 12;
+  }
+
+  .submit-btn:active:not(:disabled) {
+    transform: scale(0.95);
+  }
+
+  .submit-btn:disabled {
+    opacity: 0.3;
+    cursor: not-allowed;
+    box-shadow: none;
+  }
+
+  .fish-icon { width: 32px; height: auto; }
+  
+  /* Скрываем оба инпута */
+  input[type=file] { display: none; }
+
+  .status-wrapper {
+    margin-top: 16px;
+    min-height: 40px; 
+    display: flex;
+    align-items: flex-start;
+    justify-content: center;
+    width: 90%;
+    max-width: 380px;
+    position: relative;
+    z-index: 10;
+  }
+
+  .status {
+    background-color: #0d0d0f; 
+    color: #fff;
+    padding: 10px 20px;
+    border-radius: 999px;
+    font-size: 14px;
+    text-align: center;
+    opacity: 0;
+    transform: translateY(10px);
+    transition: all 0.4s cubic-bezier(0.25, 1, 0.5, 1);
+    box-shadow: 0 8px 16px rgba(0, 0, 0, 0.1);
+    pointer-events: none;
+  }
+
+  .status.show {
+    opacity: 1;
+    transform: translateY(0);
+  }
+
+  .status.error { border: 1px solid #FF6F59; color: #FF6F59; }
+  .status.success { border: 1px solid #128c7e; color: #128c7e; }
+  .status.loading { border: 1px solid #555; color: #bbb; }
+
+  .instructions-panel {
+    width: 90%;
+    max-width: 440px;
+    position: relative;
+    z-index: 10;
+    max-height: 0;
+    overflow: hidden;
+    opacity: 0;
+    transition: all 0.5s ease-in-out;
+  }
+
+  .instructions-panel.open {
+    max-height: 600px;
+    opacity: 1;
+    margin-top: 20px;
+  }
 
   .step {
     display: flex;
     gap: 14px;
-    background: rgba(234,247,247,0.06);
-    border: 1px solid rgba(234,247,247,0.12);
-    border-radius: var(--radius-md);
+    background-color: #0d0d0f;
+    border-radius: 20px;
     padding: 16px;
-    margin-top: 16px;
+    margin-bottom: 12px;
+    color: #e5e5e8;
+    text-align: left;
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.08);
   }
+
   .step-num {
     flex: 0 0 auto;
     width: 34px; height: 34px;
     border-radius: 50%;
-    background: var(--sand);
-    color: var(--ink);
-    font-family: var(--font-display);
-    font-weight: 800;
+    background: #128c7e;
+    color: #fff;
+    font-weight: bold;
     display: flex; align-items: center; justify-content: center;
-    font-size: 17px;
-  }
-  .step-body h3 { margin: 2px 0 4px; font-family: var(--font-display); font-size: 18px; }
-  .step-body p { margin: 0; font-size: 14px; line-height: 1.45; opacity: 0.85; }
-
-  .species-grid {
-    display: grid;
-    grid-template-columns: repeat(3, 1fr);
-    gap: 10px;
-    margin-top: 10px;
-  }
-  .species-card {
-    background: rgba(234,247,247,0.08);
-    border: 2px solid transparent;
-    border-radius: var(--radius-sm);
-    padding: 12px 6px;
-    text-align: center;
-    color: var(--foam);
-    font-family: var(--font-body);
-    font-weight: 700;
-    font-size: 12.5px;
-    transition: transform 0.15s ease, border-color 0.15s ease, background 0.15s ease;
-  }
-  .species-card .emoji { font-size: 26px; display: block; margin-bottom: 4px; }
-  .species-card.selected {
-    border-color: var(--sand);
-    background: rgba(242,193,78,0.16);
-    transform: translateY(-2px);
+    font-size: 16px;
   }
 
-  a.stencil-link, button.stencil-btn {
+  .step-body h3 { margin: 0 0 6px; font-size: 16px; font-weight: 600; color: #fff; }
+  .step-body p { margin: 0; font-size: 13px; line-height: 1.4; opacity: 0.8; }
+
+  .stencil-link {
     display: inline-flex;
     align-items: center;
     gap: 8px;
-    margin-top: 12px;
-    background: transparent;
-    color: var(--shallow);
-    border: 1px dashed var(--shallow) !important;
-    border-radius: 999px;
-    padding: 8px 14px;
-    font-size: 13px;
-    font-weight: 700;
-    text-decoration: none;
-  }
-
-  .camera-box {
     margin-top: 10px;
-    border-radius: var(--radius-md);
-    overflow: hidden;
-    background: #021620;
-    aspect-ratio: 4 / 3;
-    position: relative;
+    color: #128c7e;
+    font-size: 13px;
+    font-weight: 600;
+    text-decoration: none;
+    border: 1px dashed #128c7e;
+    padding: 8px 12px;
+    border-radius: 8px;
+    transition: background 0.2s;
+  }
+  .stencil-link:active { background: rgba(18, 140, 126, 0.1); }
+
+
+  /* === МОДАЛЬНОЕ ОКНО С БЛЮРОМ (МЕНЮ ВЫБОРА) === */
+  .modal-overlay {
+    position: fixed;
+    top: 0; left: 0; right: 0; bottom: 0;
+    background: rgba(0, 0, 0, 0.3); /* Легкое затемнение */
+    backdrop-filter: blur(8px); /* Размытие фона */
+    -webkit-backdrop-filter: blur(8px);
+    z-index: 100;
     display: flex;
     align-items: center;
     justify-content: center;
-    border: 1px solid rgba(234,247,247,0.15);
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.3s ease;
   }
-  .camera-box video, .camera-box canvas, .camera-box img {
-    width: 100%; height: 100%; object-fit: cover; display: block;
-  }
-  .camera-placeholder { font-size: 13px; opacity: 0.6; text-align: center; padding: 20px; }
 
-  .primary-btn {
-    width: 100%;
-    margin-top: 14px;
-    padding: 16px;
-    border-radius: 999px;
-    background: linear-gradient(180deg, var(--coral), #E1523F);
-    color: white;
+  .modal-overlay.active {
+    opacity: 1;
+    pointer-events: auto;
+  }
+
+  .modal-content {
+    background: #0d0d0f;
+    width: 85%;
+    max-width: 320px;
+    border-radius: 24px;
+    padding: 24px;
+    transform: scale(0.95) translateY(10px);
+    transition: all 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+    box-shadow: 0 16px 40px rgba(0, 0, 0, 0.2);
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+  }
+
+  .modal-overlay.active .modal-content {
+    transform: scale(1) translateY(0);
+  }
+
+  .modal-title {
+    color: #fff;
+    margin: 0 0 10px 0;
     font-size: 18px;
-    font-weight: 800;
-    letter-spacing: 0.3px;
-    box-shadow: 0 8px 20px rgba(255,111,89,0.35);
-  }
-  .primary-btn:disabled { opacity: 0.5; box-shadow: none; }
-
-  .secondary-row { display: flex; gap: 10px; margin-top: 10px; }
-  .secondary-btn {
-    flex: 1;
-    padding: 12px;
-    border-radius: 999px;
-    background: rgba(234,247,247,0.1);
-    color: var(--foam);
-    font-weight: 700;
-    font-size: 14px;
-  }
-
-  .status {
-    margin-top: 14px;
-    padding: 12px 14px;
-    border-radius: var(--radius-sm);
-    font-size: 14px;
-    font-weight: 700;
+    font-weight: 600;
     text-align: center;
-    display: none;
   }
-  .status.show { display: block; }
-  .status.ok { background: rgba(80,200,140,0.15); color: #7EE7B8; border: 1px solid rgba(126,231,184,0.35); }
-  .status.err { background: rgba(255,111,89,0.15); color: #FFB199; border: 1px solid rgba(255,111,89,0.35); }
-  .status.busy { background: rgba(242,193,78,0.15); color: var(--sand); border: 1px solid rgba(242,193,78,0.35); }
 
-  input[type=file] { display: none; }
+  .modal-btn {
+    background: rgba(255, 255, 255, 0.08);
+    border: none;
+    border-radius: 16px;
+    padding: 16px;
+    color: #fff;
+    font-size: 16px;
+    font-weight: 500;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    transition: background 0.2s;
+  }
+
+  .modal-btn:active {
+    background: rgba(255, 255, 255, 0.15);
+  }
+
+  .modal-icon {
+    font-size: 20px;
+  }
+
+  .modal-cancel {
+    background: transparent;
+    border: none;
+    color: #999;
+    padding: 10px;
+    font-size: 14px;
+    margin-top: 8px;
+    cursor: pointer;
+  }
 </style>
 </head>
 <body>
-<div class="wrap">
-  <header class="hero">
-    <h1>🐠 Оживи свою рыбку</h1>
-    <p>Нарисуй рыбку на бумаге — и она поплывёт на большом экране</p>
-  </header>
 
+<canvas id="bgCanvas"></canvas>
+
+<div class="logo-container">
+  <img src="/assets/лого_фулл.svg" alt="Логотип Анимагия" class="main-logo">
+</div>
+
+<div class="controls-row">
+  <button id="burgerBtn" class="burger-btn">
+    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+      <line x1="4" y1="12" x2="20" y2="12"></line>
+      <line x1="4" y1="6" x2="20" y2="6"></line>
+      <line x1="4" y1="18" x2="20" y2="18"></line>
+    </svg>
+  </button>
+
+  <div class="action-bar">
+    <button id="chooseFileBtn" class="upload-btn">
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+        <polyline points="7 10 12 15 17 10"></polyline>
+        <line x1="12" y1="15" x2="12" y2="3"></line>
+      </svg>
+      <span id="uploadText">Загрузка изображения</span>
+    </button>
+    
+    <button id="captureBtn" class="submit-btn" disabled>
+      <img src="/assets/кнопка_сайт_Монтажная_область_1_копия_3.svg" alt="Рыбка" class="fish-icon">
+    </button>
+  </div>
+</div>
+
+<!-- Модальное окно выбора загрузки -->
+<div class="modal-overlay" id="uploadModal">
+  <div class="modal-content">
+    <h3 class="modal-title">Как загрузить рыбку?</h3>
+    <button class="modal-btn" id="btnCamera">
+      <span class="modal-icon">📷</span> Сделать фото
+    </button>
+    <button class="modal-btn" id="btnGallery">
+      <span class="modal-icon">🖼</span> Выбрать из галереи
+    </button>
+    <button class="modal-cancel" id="btnCancel">Отмена</button>
+  </div>
+</div>
+
+<!-- Два скрытых инпута: один для камеры, другой для файлов -->
+<input type="file" id="cameraInput" accept="image/*" capture="environment">
+<input type="file" id="galleryInput" accept="image/*">
+
+<div class="status-wrapper">
+  <div id="status" class="status"></div>
+</div>
+
+<div class="instructions-panel" id="instructionsPanel">
   <div class="step">
     <div class="step-num">1</div>
-    <div class="step-body">
-      <h3>Выбери рыбку</h3>
-      <div class="species-grid" id="speciesGrid"></div>
-    </div>
-  </div>
-
-  <div class="step">
-    <div class="step-num">2</div>
     <div class="step-body">
       <h3>Распечатай трафарет и нарисуй</h3>
       <p>На листе A4 должна быть чёрная рамка — рисуй рыбку внутри неё. Нет принтера? Нарисуй свою рамку от руки, чёрным маркером, на весь лист.</p>
@@ -173,23 +373,10 @@
   </div>
 
   <div class="step">
-    <div class="step-num">3</div>
+    <div class="step-num">2</div>
     <div class="step-body">
-      <h3>Сфотографируй рисунок</h3>
-      <p>Положи лист на стол так, чтобы вся рамка была видна в кадре, и держи телефон прямо над листом.</p>
-
-      <div class="camera-box" id="cameraBox">
-        <div class="camera-placeholder" id="cameraPlaceholder">Нажми «Включить камеру» или загрузи фото</div>
-      </div>
-
-      <div class="secondary-row">
-        <button class="secondary-btn" id="startCameraBtn">📷 Включить камеру</button>
-        <button class="secondary-btn" id="chooseFileBtn">🖼 Загрузить фото</button>
-      </div>
-      <input type="file" id="fileInput" accept="image/*" capture="environment">
-
-      <button class="primary-btn" id="captureBtn" disabled>Отправить рыбку на стену 🌊</button>
-      <div class="status" id="status"></div>
+      <h3>Сфотографируй и отправь</h3>
+      <p>Нажми на черную кнопку рядом с меню, чтобы загрузить фото или включить камеру. Затем нажми на бирюзовую рыбку, чтобы отправить её на стену!</p>
     </div>
   </div>
 </div>
