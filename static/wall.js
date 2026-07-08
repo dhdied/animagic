@@ -111,7 +111,6 @@ function initEnvironment() {
       });
     }
     
-    // Задаем уникальные цвета для ночи и дня
     const nColor = isGlowing ? (Math.random() > 0.5 ? '#cba6f7' : '#b4befe') : '#1e3846';
     const dColor = isGlowing ? (Math.random() > 0.5 ? '#8bd450' : '#4ade80') : '#2d6a4f';
 
@@ -143,11 +142,9 @@ resize();
 // Advanced Background Rendering
 // ---------------------------------------------------------------
 function drawBackground(t) {
-  // Плавная интерполяция времени суток (учитывает DeltaTime через кадры)
   const targetFactor = isNight ? 1.0 : 0.0;
   timeFactor += (targetFactor - timeFactor) * 0.03;
 
-  // 1. Интерполяция градиентов океана
   const bgTop = lerpColor("#2dc2d1", "#1c2b3e", timeFactor);
   const bgMid = lerpColor("#1085ab", "#0f1722", timeFactor);
   const bgBot = lerpColor("#054a70", "#070a10", timeFactor);
@@ -159,7 +156,6 @@ function drawBackground(t) {
   ctx.fillStyle = bgGrad;
   ctx.fillRect(0, 0, W, H);
 
-  // 2. Объемные лучи света (Меняют цвет от теплого к холодному)
   if (!reducedMotion) {
     ctx.save();
     ctx.globalCompositeOperation = 'screen'; 
@@ -167,7 +163,7 @@ function drawBackground(t) {
     const rayR = Math.round(lerp(255, 180, timeFactor));
     const rayG = Math.round(lerp(250, 190, timeFactor));
     const rayB = Math.round(lerp(220, 254, timeFactor));
-    const maxAlpha = lerp(0.15, 0.08, timeFactor); // Днем лучи ярче
+    const maxAlpha = lerp(0.15, 0.08, timeFactor); 
 
     lightRays.forEach(ray => {
       const sway = Math.sin(t * ray.speed + ray.phase) * (W * 0.1);
@@ -192,7 +188,6 @@ function drawBackground(t) {
     ctx.restore();
   }
 
-  // 3. Планктон (Днем почти полностью исчезает)
   if (!reducedMotion) {
     ctx.save();
     plankton.forEach(p => {
@@ -202,7 +197,6 @@ function drawBackground(t) {
       if(p.x < 0) p.x = 1;
       if(p.x > 1) p.x = 0;
 
-      // Умножаем на timeFactor: ночью планктон виден, днем - нет
       const alpha = (Math.sin(t * 0.002 + p.phase) * 0.5 + 0.5) * 0.6 * timeFactor;
       ctx.globalAlpha = alpha;
       ctx.fillStyle = p.color;
@@ -213,7 +207,6 @@ function drawBackground(t) {
     ctx.restore();
   }
 
-  // 4. Реалистичные пузырьки 
   ctx.save();
   ctx.lineWidth = 1;
   bubbles.forEach(b => {
@@ -237,7 +230,6 @@ function drawBackground(t) {
   });
   ctx.restore();
 
-  // 5. Многослойное дно (Теплый песок днем, темный ночью)
   const bgSandDayTop = "#d4a373", bgSandDayBot = "#b5835a";
   const bgSandNightTop = "#0b1219", bgSandNightBot = "#05080c";
   
@@ -268,19 +260,16 @@ function drawBackground(t) {
   }
   ctx.lineTo(W, H); ctx.lineTo(0, H); ctx.fill();
 
-  // 6. Флора (Светится только ночью)
   ctx.save();
   ctx.lineCap = "round";
   ctx.lineJoin = "round";
   flora.forEach(plant => {
     ctx.lineWidth = plant.isGlowing ? 2.5 : 4;
     
-    // Плавный переход цвета
     const currentColor = lerpColor(plant.dayColor, plant.nightColor, timeFactor);
     ctx.strokeStyle = currentColor;
     
     if (plant.isGlowing) {
-      // Свечение работает только ночью (timeFactor -> 1)
       ctx.shadowBlur = 12 * timeFactor; 
       ctx.shadowColor = currentColor;
     } else {
@@ -301,11 +290,9 @@ function drawBackground(t) {
   });
   ctx.restore();
 
-  // 7. Обновление освещения 3D-моделей
-  ambientLight.intensity = lerp(1.1, 0.7, timeFactor); // Днем ярче
+  ambientLight.intensity = lerp(1.1, 0.7, timeFactor); 
   dirLight.intensity = lerp(1.2, 0.8, timeFactor);
   
-  // Three.js lerpColors
   const dLightDay = new THREE.Color(0xfff9e6);
   const dLightNight = new THREE.Color(0xb4befe);
   dirLight.color.lerpColors(dLightDay, dLightNight, timeFactor);
@@ -343,13 +330,12 @@ function updateAndDrawFood(t) {
 }
 
 // ---------------------------------------------------------------
-// Fish
+// Fish (2D)
 // ---------------------------------------------------------------
 const EAT_RADIUS = 34;
 const ATTRACT_RADIUS = 420;
 const TURN_RATE = 4.5;
 const ACCEL = 280;
-const MARGIN = 60;
 const MAX_FISH = 40;
 
 const fish = [];
@@ -390,6 +376,9 @@ class Fish {
     this.wanderDir = this.wanderAngle;
 
     this.eatingFoodIndex = -1;
+    
+    // Новое состояние для охоты за кормом
+    this.isHunting = false;
   }
 
   targetFood() {
@@ -433,17 +422,47 @@ class Fish {
     this.facing = Math.cos(this.angle) >= 0 ? 1 : -1;
   }
 
-  keepInBounds() {
-    if (this.x < MARGIN)             this.setTarget( Math.abs(this.tvx) || this.speedBase, this.tvy);
-    if (this.x > W - MARGIN)         this.setTarget(-Math.abs(this.tvx) || -this.speedBase, this.tvy);
-    if (this.y < MARGIN)             this.setTarget(this.tvx,  Math.abs(this.tvy) || this.speedBase * 0.4);
-    if (this.y > H * 0.82)           this.setTarget(this.tvx, -Math.abs(this.tvy) || -this.speedBase * 0.4);
+  keepInBounds(isHunting) {
+    const marginX = 80;
+    const marginY = 80;
+    const bottomLimit = H * 0.88;
+
+    // Динамический марджин: если плывем за едой, подпускаем ближе к стеклу
+    const currentMargin = isHunting ? 10 : marginX;
+
+    // 1. ОТСКОК ОТ ЛЕВОЙ И ПРАВОЙ СТЕНЫ
+    if ((this.x < currentMargin && this.vx < 0) || (this.x > W - currentMargin && this.vx > 0)) {
+      this.vx *= -1;
+      this.tvx *= -1;
+      this.angle = Math.PI - this.angle;
+      this.wanderDir = Math.PI - this.wanderDir;
+      this.wanderAngle = Math.PI - this.wanderAngle;
+      this.dir *= -1;
+      if (isHunting) this.isHunting = false; 
+    }
+
+    // 2. ОТСКОК ОТ ВЕРХА И НИЗА
+    if ((this.y < currentMargin && this.vy < 0) || (this.y > bottomLimit - currentMargin && this.vy > 0)) {
+      this.vy *= -1;
+      this.tvy *= -1;
+      this.angle = -this.angle;
+      this.wanderDir = -this.wanderDir;
+      this.wanderAngle = -this.wanderAngle;
+      if (isHunting) this.isHunting = false;
+    }
+
+    // 3. ЖЕСТКИЙ ЛИМИТ (чуть дальше отступа, чтобы не ломать охоту)
+    if (this.x < -100) this.x = marginX;
+    if (this.x > W + 100) this.x = W - marginX;
+    if (this.y < -100) this.y = marginY;
+    if (this.y > bottomLimit + 100) this.y = bottomLimit - marginY;
   }
 
   update(dt) {
     const foodIdx = this.targetFood();
 
     if (foodIdx >= 0) {
+      this.isHunting = true;
       const f = foods[foodIdx];
       const tx = f.x - this.x;
       const ty = (f.y + f.sink) - this.y;
@@ -453,41 +472,47 @@ class Fish {
       if (dist < EAT_RADIUS) {
         foods.splice(foodIdx, 1);
         this.pulse = 1;
+        this.isHunting = false;
       }
-    } else if (this.pattern === "sine") {
-      this.dir = this.x < MARGIN ? 1 : (this.x > W - MARGIN ? -1 : this.dir);
-      this.phase += dt * 1.6;
-      this.setTarget(this.dir * this.speedBase, Math.cos(this.phase) * this.speedBase * 0.6);
-    } else if (this.pattern === "circle") {
-      this.circleAngle += this.angularSpeed * dt;
-      this.cx += Math.cos(performance.now() * 0.00007 + this.id.length) * 6 * dt;
-      this.cy += Math.sin(performance.now() * 0.00005) * 4 * dt;
-      this.cx = Math.min(Math.max(this.cx, this.radius + 40), W - this.radius - 40);
-      this.cy = Math.min(Math.max(this.cy, this.radius + 40), H * 0.8 - this.radius);
-      const tx = -Math.sin(this.circleAngle) * this.angularSpeed;
-      const ty =  Math.cos(this.circleAngle) * this.angularSpeed * 0.6;
-      this.setTarget(tx * this.speedBase, ty * this.speedBase);
-    } else if (this.pattern === "free") {
-      this.wanderTimer -= dt;
-      if (this.wanderTimer <= 0) {
-        this.wanderTimer = 1.5 + Math.random() * 3;
-        this.wanderDir = Math.random() * Math.PI * 2;
-      }
-      this.setTarget(
-        Math.cos(this.wanderDir) * this.speedBase,
-        Math.sin(this.wanderDir) * this.speedBase * 0.55
-      );
     } else {
-      this.wanderAngle += (Math.random() - 0.5) * 1.4 * dt;
-      this.setTarget(
-        Math.cos(this.wanderAngle) * this.speedBase,
-        Math.sin(this.wanderAngle) * this.speedBase
-      );
+      this.isHunting = false;
+      if (this.pattern === "sine") {
+        this.dir = this.x < 80 ? 1 : (this.x > W - 80 ? -1 : this.dir);
+        this.phase += dt * 1.6;
+        this.setTarget(this.dir * this.speedBase, Math.cos(this.phase) * this.speedBase * 0.6);
+      } else if (this.pattern === "circle") {
+        this.circleAngle += this.angularSpeed * dt;
+        this.cx += Math.cos(performance.now() * 0.00007 + this.id.length) * 6 * dt;
+        this.cy += Math.sin(performance.now() * 0.00005) * 4 * dt;
+        this.cx = Math.min(Math.max(this.cx, this.radius + 40), W - this.radius - 40);
+        this.cy = Math.min(Math.max(this.cy, this.radius + 40), H * 0.8 - this.radius);
+        const tx = -Math.sin(this.circleAngle) * this.angularSpeed;
+        const ty =  Math.cos(this.circleAngle) * this.angularSpeed * 0.6;
+        this.setTarget(tx * this.speedBase, ty * this.speedBase);
+      } else if (this.pattern === "free") {
+        this.wanderTimer -= dt;
+        if (this.wanderTimer <= 0) {
+          this.wanderTimer = 1.5 + Math.random() * 3;
+          this.wanderDir = Math.random() * Math.PI * 2;
+        }
+        this.setTarget(
+          Math.cos(this.wanderDir) * this.speedBase,
+          Math.sin(this.wanderDir) * this.speedBase * 0.55
+        );
+      } else {
+        this.wanderAngle += (Math.random() - 0.5) * 1.4 * dt;
+        this.setTarget(
+          Math.cos(this.wanderAngle) * this.speedBase,
+          Math.sin(this.wanderAngle) * this.speedBase
+        );
+      }
     }
 
     this.steer(dt);
     this.faceVelocity(dt);
-    this.keepInBounds();
+    
+    // Передаем статус охоты в рамки
+    this.keepInBounds(this.isHunting);
 
     this.x += this.vx * dt;
     this.y += this.vy * dt;
@@ -518,6 +543,9 @@ class Fish {
   }
 }
 
+// ---------------------------------------------------------------
+// WebSocket & DB History Initialization
+// ---------------------------------------------------------------
 function connectWS() {
   const proto = location.protocol === "https:" ? "wss" : "ws";
   const ws = new WebSocket(`${proto}://${location.host}/ws/wall`);
@@ -528,12 +556,19 @@ function connectWS() {
 
   ws.onmessage = (event) => {
     const msg = JSON.parse(event.data);
+    
+    if (msg.type === "clear_all") {
+      fish.length = 0; 
+      fish3d.forEach(f => scene3d.remove(f.group));
+      fish3d.length = 0;
+      emptyMsg.style.display = "flex"; 
+      return; 
+    }
+
     if (msg.type === "new_fish" || msg.type === "new_fish_3d") {
       emptyMsg.style.display = "none";
       fish.push(new Fish(msg));
-      while (fish.length > MAX_FISH) {
-        fish.shift();
-      }
+      while (fish.length > MAX_FISH) fish.shift();
     }
     if (msg.type === "new_fish_3d_animated") {
       emptyMsg.style.display = "none";
@@ -545,8 +580,36 @@ function connectWS() {
     }
   };
 }
-connectWS();
 
+async function loadHistory() {
+  try {
+    const res = await fetch("/api/history");
+    const fishesData = await res.json();
+    
+    fishesData.reverse().forEach(msg => {
+      if (msg.type === "new_fish" || msg.type === "new_fish_3d") {
+        fish.push(new Fish(msg));
+      }
+      if (msg.type === "new_fish_3d_animated") {
+        fish3d.push(new AnimatedFish3D(msg));
+      }
+    });
+    
+    if (fish.length > 0 || fish3d.length > 0) {
+      emptyMsg.style.display = "none";
+    }
+  } catch (err) {
+    console.error("Ошибка загрузки истории океана:", err);
+  }
+}
+
+loadHistory().then(() => {
+  connectWS();
+});
+
+// ---------------------------------------------------------------
+// Fish (3D Animated)
+// ---------------------------------------------------------------
 const fish3d = [];
 
 class AnimatedFish3D {
@@ -580,6 +643,9 @@ class AnimatedFish3D {
     this.wanderTimer = 0;
     this.wanderDir = this.wanderAngle;
     this.eatingFoodIndex = -1;
+    
+    // Новое состояние для охоты за кормом
+    this.isHunting = false;
 
     this.group = new THREE.Group();
     this.group.visible = false; 
@@ -618,6 +684,7 @@ class AnimatedFish3D {
             mat.color.set(0xffffff);
             mat.transparent = true;
             mat.depthWrite = false;
+            mat.side = THREE.DoubleSide; 
             mat.needsUpdate = true;
           }
         }
@@ -649,23 +716,12 @@ class AnimatedFish3D {
   }
 
   _syncPosition(dt = 0.05) {
-    // 1. Обновляем позицию на экране
     this.group.position.set(this.x, H - this.y, 0);
-    
-    // 2. Наклоняем рыбу по траектории (вверх/вниз)
     this.group.rotation.z = -this.angle;
 
-    // 3. Плавный 3D-разворот (бочка)
     if (this.model) {
-      // Смотрим, куда направлен вектор скорости
       const isFacingRight = Math.cos(this.angle) >= 0;
-      
-      // Целевой угол: 180 градусов (Math.PI) или 0
       const targetRotX = isFacingRight ? Math.PI : 0;
-      
-      // Плавная интерполяция текущего угла к целевому.
-      // Коэффициент 8.0 — это скорость переворота. 
-      // Можешь сделать 12.0 для резкого разворота или 5.0 для ленивого.
       this.model.rotation.x += (targetRotX - this.model.rotation.x) * 8.0 * dt;
     }
   }
@@ -710,17 +766,47 @@ class AnimatedFish3D {
     else this.angle += Math.sign(diff) * maxStep;
   }
 
-  keepInBounds() {
-    if (this.x < MARGIN)             this.setTarget( Math.abs(this.tvx) || this.speedBase, this.tvy);
-    if (this.x > W - MARGIN)         this.setTarget(-Math.abs(this.tvx) || -this.speedBase, this.tvy);
-    if (this.y < MARGIN)             this.setTarget(this.tvx,  Math.abs(this.tvy) || this.speedBase * 0.4);
-    if (this.y > H * 0.82)           this.setTarget(this.tvx, -Math.abs(this.tvy) || -this.speedBase * 0.4);
+  keepInBounds(isHunting) {
+    const marginX = 80;
+    const marginY = 80;
+    const bottomLimit = H * 0.88;
+
+    // Динамический марджин: если плывем за едой, подпускаем ближе к стеклу
+    const currentMargin = isHunting ? 10 : marginX;
+
+    // 1. ОТСКОК ОТ ЛЕВОЙ И ПРАВОЙ СТЕНЫ
+    if ((this.x < currentMargin && this.vx < 0) || (this.x > W - currentMargin && this.vx > 0)) {
+      this.vx *= -1;
+      this.tvx *= -1;
+      this.angle = Math.PI - this.angle;
+      this.wanderDir = Math.PI - this.wanderDir;
+      this.wanderAngle = Math.PI - this.wanderAngle;
+      this.dir *= -1; 
+      if (isHunting) this.isHunting = false; 
+    }
+
+    // 2. ОТСКОК ОТ ВЕРХА И НИЗА
+    if ((this.y < currentMargin && this.vy < 0) || (this.y > bottomLimit - currentMargin && this.vy > 0)) {
+      this.vy *= -1;
+      this.tvy *= -1;
+      this.angle = -this.angle;
+      this.wanderDir = -this.wanderDir;
+      this.wanderAngle = -this.wanderAngle;
+      if (isHunting) this.isHunting = false;
+    }
+
+    // 3. ЖЕСТКИЙ ЛИМИТ
+    if (this.x < -100) this.x = marginX;
+    if (this.x > W + 100) this.x = W - marginX;
+    if (this.y < -100) this.y = marginY;
+    if (this.y > bottomLimit + 100) this.y = bottomLimit - marginY;
   }
 
   update(dt) {
     const foodIdx = this.targetFood();
 
     if (foodIdx >= 0) {
+      this.isHunting = true;
       const f = foods[foodIdx];
       const tx = f.x - this.x;
       const ty = (f.y + f.sink) - this.y;
@@ -730,41 +816,47 @@ class AnimatedFish3D {
       if (dist < EAT_RADIUS) {
         foods.splice(foodIdx, 1);
         this.pulse = 1;
+        this.isHunting = false;
       }
-    } else if (this.pattern === "sine") {
-      this.dir = this.x < MARGIN ? 1 : (this.x > W - MARGIN ? -1 : this.dir);
-      this.phase += dt * 1.6;
-      this.setTarget(this.dir * this.speedBase, Math.cos(this.phase) * this.speedBase * 0.6);
-    } else if (this.pattern === "circle") {
-      this.circleAngle += this.angularSpeed * dt;
-      this.cx += Math.cos(performance.now() * 0.00007 + this.id.length) * 6 * dt;
-      this.cy += Math.sin(performance.now() * 0.00005) * 4 * dt;
-      this.cx = Math.min(Math.max(this.cx, this.radius + 40), W - this.radius - 40);
-      this.cy = Math.min(Math.max(this.cy, this.radius + 40), H * 0.8 - this.radius);
-      const tx = -Math.sin(this.circleAngle) * this.angularSpeed;
-      const ty =  Math.cos(this.circleAngle) * this.angularSpeed * 0.6;
-      this.setTarget(tx * this.speedBase, ty * this.speedBase);
-    } else if (this.pattern === "free") {
-      this.wanderTimer -= dt;
-      if (this.wanderTimer <= 0) {
-        this.wanderTimer = 1.5 + Math.random() * 3;
-        this.wanderDir = Math.random() * Math.PI * 2;
-      }
-      this.setTarget(
-        Math.cos(this.wanderDir) * this.speedBase,
-        Math.sin(this.wanderDir) * this.speedBase * 0.55
-      );
     } else {
-      this.wanderAngle += (Math.random() - 0.5) * 1.4 * dt;
-      this.setTarget(
-        Math.cos(this.wanderAngle) * this.speedBase,
-        Math.sin(this.wanderAngle) * this.speedBase
-      );
+      this.isHunting = false;
+      if (this.pattern === "sine") {
+        this.dir = this.x < 80 ? 1 : (this.x > W - 80 ? -1 : this.dir);
+        this.phase += dt * 1.6;
+        this.setTarget(this.dir * this.speedBase, Math.cos(this.phase) * this.speedBase * 0.6);
+      } else if (this.pattern === "circle") {
+        this.circleAngle += this.angularSpeed * dt;
+        this.cx += Math.cos(performance.now() * 0.00007 + this.id.length) * 6 * dt;
+        this.cy += Math.sin(performance.now() * 0.00005) * 4 * dt;
+        this.cx = Math.min(Math.max(this.cx, this.radius + 40), W - this.radius - 40);
+        this.cy = Math.min(Math.max(this.cy, this.radius + 40), H * 0.8 - this.radius);
+        const tx = -Math.sin(this.circleAngle) * this.angularSpeed;
+        const ty =  Math.cos(this.circleAngle) * this.angularSpeed * 0.6;
+        this.setTarget(tx * this.speedBase, ty * this.speedBase);
+      } else if (this.pattern === "free") {
+        this.wanderTimer -= dt;
+        if (this.wanderTimer <= 0) {
+          this.wanderTimer = 1.5 + Math.random() * 3;
+          this.wanderDir = Math.random() * Math.PI * 2;
+        }
+        this.setTarget(
+          Math.cos(this.wanderDir) * this.speedBase,
+          Math.sin(this.wanderDir) * this.speedBase * 0.55
+        );
+      } else {
+        this.wanderAngle += (Math.random() - 0.5) * 1.4 * dt;
+        this.setTarget(
+          Math.cos(this.wanderAngle) * this.speedBase,
+          Math.sin(this.wanderAngle) * this.speedBase
+        );
+      }
     }
 
     this.steer(dt);
     this.faceVelocity(dt);
-    this.keepInBounds();
+    
+    // Передаем статус охоты в рамки
+    this.keepInBounds(this.isHunting);
 
     this.x += this.vx * dt;
     this.y += this.vy * dt;
