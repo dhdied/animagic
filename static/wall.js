@@ -648,9 +648,26 @@ class AnimatedFish3D {
     }
   }
 
-  _syncPosition() {
+  _syncPosition(dt = 0.05) {
+    // 1. Обновляем позицию на экране
     this.group.position.set(this.x, H - this.y, 0);
+    
+    // 2. Наклоняем рыбу по траектории (вверх/вниз)
     this.group.rotation.z = -this.angle;
+
+    // 3. Плавный 3D-разворот (бочка)
+    if (this.model) {
+      // Смотрим, куда направлен вектор скорости
+      const isFacingRight = Math.cos(this.angle) >= 0;
+      
+      // Целевой угол: 180 градусов (Math.PI) или 0
+      const targetRotX = isFacingRight ? Math.PI : 0;
+      
+      // Плавная интерполяция текущего угла к целевому.
+      // Коэффициент 8.0 — это скорость переворота. 
+      // Можешь сделать 12.0 для резкого разворота или 5.0 для ленивого.
+      this.model.rotation.x += (targetRotX - this.model.rotation.x) * 8.0 * dt;
+    }
   }
 
   targetFood() {
@@ -754,7 +771,7 @@ class AnimatedFish3D {
 
     if (this.pulse > 0) this.pulse = Math.max(0, this.pulse - dt * 2);
 
-    this._syncPosition();
+    this._syncPosition(dt);
 
     if (this.animationMixer) {
       this.animationMixer.update(dt);
