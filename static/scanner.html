@@ -1,0 +1,199 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Сканер рыбки — Fish Wall</title>
+<link rel="stylesheet" href="/static/style.css">
+<style>
+  body {
+    background:
+      radial-gradient(1200px 800px at 50% -10%, #0d3b52 0%, transparent 60%),
+      linear-gradient(180deg, var(--deep) 0%, #062038 100%);
+    min-height: 100%;
+    padding-bottom: 40px;
+  }
+
+  .wrap { max-width: 480px; margin: 0 auto; padding: 20px 18px 60px; }
+
+  header.hero { text-align: center; padding: 18px 0 10px; }
+  header.hero h1 {
+    font-family: var(--font-display);
+    font-weight: 800;
+    font-size: clamp(28px, 8vw, 38px);
+    margin: 6px 0 4px;
+    letter-spacing: 0.5px;
+  }
+  header.hero p { margin: 0; opacity: 0.8; font-size: 15px; }
+
+  .step {
+    display: flex;
+    gap: 14px;
+    background: rgba(234,247,247,0.06);
+    border: 1px solid rgba(234,247,247,0.12);
+    border-radius: var(--radius-md);
+    padding: 16px;
+    margin-top: 16px;
+  }
+  .step-num {
+    flex: 0 0 auto;
+    width: 34px; height: 34px;
+    border-radius: 50%;
+    background: var(--sand);
+    color: var(--ink);
+    font-family: var(--font-display);
+    font-weight: 800;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 17px;
+  }
+  .step-body h3 { margin: 2px 0 4px; font-family: var(--font-display); font-size: 18px; }
+  .step-body p { margin: 0; font-size: 14px; line-height: 1.45; opacity: 0.85; }
+
+  .species-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 10px;
+    margin-top: 10px;
+  }
+  .species-card {
+    background: rgba(234,247,247,0.08);
+    border: 2px solid transparent;
+    border-radius: var(--radius-sm);
+    padding: 12px 6px;
+    text-align: center;
+    color: var(--foam);
+    font-family: var(--font-body);
+    font-weight: 700;
+    font-size: 12.5px;
+    transition: transform 0.15s ease, border-color 0.15s ease, background 0.15s ease;
+  }
+  .species-card .emoji { font-size: 26px; display: block; margin-bottom: 4px; }
+  .species-card.selected {
+    border-color: var(--sand);
+    background: rgba(242,193,78,0.16);
+    transform: translateY(-2px);
+  }
+
+  a.stencil-link, button.stencil-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    margin-top: 12px;
+    background: transparent;
+    color: var(--shallow);
+    border: 1px dashed var(--shallow) !important;
+    border-radius: 999px;
+    padding: 8px 14px;
+    font-size: 13px;
+    font-weight: 700;
+    text-decoration: none;
+  }
+
+  .camera-box {
+    margin-top: 10px;
+    border-radius: var(--radius-md);
+    overflow: hidden;
+    background: #021620;
+    aspect-ratio: 4 / 3;
+    position: relative;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border: 1px solid rgba(234,247,247,0.15);
+  }
+  .camera-box video, .camera-box canvas, .camera-box img {
+    width: 100%; height: 100%; object-fit: cover; display: block;
+  }
+  .camera-placeholder { font-size: 13px; opacity: 0.6; text-align: center; padding: 20px; }
+
+  .primary-btn {
+    width: 100%;
+    margin-top: 14px;
+    padding: 16px;
+    border-radius: 999px;
+    background: linear-gradient(180deg, var(--coral), #E1523F);
+    color: white;
+    font-size: 18px;
+    font-weight: 800;
+    letter-spacing: 0.3px;
+    box-shadow: 0 8px 20px rgba(255,111,89,0.35);
+  }
+  .primary-btn:disabled { opacity: 0.5; box-shadow: none; }
+
+  .secondary-row { display: flex; gap: 10px; margin-top: 10px; }
+  .secondary-btn {
+    flex: 1;
+    padding: 12px;
+    border-radius: 999px;
+    background: rgba(234,247,247,0.1);
+    color: var(--foam);
+    font-weight: 700;
+    font-size: 14px;
+  }
+
+  .status {
+    margin-top: 14px;
+    padding: 12px 14px;
+    border-radius: var(--radius-sm);
+    font-size: 14px;
+    font-weight: 700;
+    text-align: center;
+    display: none;
+  }
+  .status.show { display: block; }
+  .status.ok { background: rgba(80,200,140,0.15); color: #7EE7B8; border: 1px solid rgba(126,231,184,0.35); }
+  .status.err { background: rgba(255,111,89,0.15); color: #FFB199; border: 1px solid rgba(255,111,89,0.35); }
+  .status.busy { background: rgba(242,193,78,0.15); color: var(--sand); border: 1px solid rgba(242,193,78,0.35); }
+
+  input[type=file] { display: none; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header class="hero">
+    <h1>🐠 Оживи свою рыбку</h1>
+    <p>Нарисуй рыбку на бумаге — и она поплывёт на большом экране</p>
+  </header>
+
+  <div class="step">
+    <div class="step-num">1</div>
+    <div class="step-body">
+      <h3>Выбери рыбку</h3>
+      <div class="species-grid" id="speciesGrid"></div>
+    </div>
+  </div>
+
+  <div class="step">
+    <div class="step-num">2</div>
+    <div class="step-body">
+      <h3>Распечатай трафарет и нарисуй</h3>
+      <p>На листе A4 должна быть чёрная рамка — рисуй рыбку внутри неё. Нет принтера? Нарисуй свою рамку от руки, чёрным маркером, на весь лист.</p>
+      <a class="stencil-link" href="/assets/stencil_a4.svg" target="_blank">⬇️ Открыть трафарет для печати</a>
+    </div>
+  </div>
+
+  <div class="step">
+    <div class="step-num">3</div>
+    <div class="step-body">
+      <h3>Сфотографируй рисунок</h3>
+      <p>Положи лист на стол так, чтобы вся рамка была видна в кадре, и держи телефон прямо над листом.</p>
+
+      <div class="camera-box" id="cameraBox">
+        <div class="camera-placeholder" id="cameraPlaceholder">Нажми «Включить камеру» или загрузи фото</div>
+      </div>
+
+      <div class="secondary-row">
+        <button class="secondary-btn" id="startCameraBtn">📷 Включить камеру</button>
+        <button class="secondary-btn" id="chooseFileBtn">🖼 Загрузить фото</button>
+      </div>
+      <input type="file" id="fileInput" accept="image/*" capture="environment">
+
+      <button class="primary-btn" id="captureBtn" disabled>Отправить рыбку на стену 🌊</button>
+      <div class="status" id="status"></div>
+    </div>
+  </div>
+</div>
+
+<script src="/static/scanner.js"></script>
+</body>
+</html>

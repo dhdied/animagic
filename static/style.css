@@ -1,0 +1,53 @@
+/* ---------------------------------------------------------------
+   Fish Wall — shared design tokens
+   Palette: deep-sea gradient (#04293A -> #0A6E8C), warm sand (#F2C14E),
+   coral accent (#FF6F59), foam white (#EAF7F7).
+   Type: "Baloo 2" for playful display headings, "Nunito" for UI/body.
+------------------------------------------------------------------*/
+
+@import url('https://fonts.googleapis.com/css2?family=Baloo+2:wght@500;700;800&family=Nunito:wght@400;600;700;800&display=swap');
+
+:root {
+  --deep: #04293A;
+  --mid: #0A6E8C;
+  --shallow: #1E9FA8;
+  --foam: #EAF7F7;
+  --sand: #F2C14E;
+  --coral: #FF6F59;
+  --ink: #052B3A;
+
+  --font-display: 'Baloo 2', system-ui, sans-serif;
+  --font-body: 'Nunito', system-ui, sans-serif;
+
+  --radius-lg: 28px;
+  --radius-md: 18px;
+  --radius-sm: 12px;
+}
+
+* { box-sizing: border-box; }
+
+html, body {
+  margin: 0;
+  padding: 0;
+  height: 100%;
+  font-family: var(--font-body);
+  color: var(--foam);
+  background: var(--deep);
+}
+
+button {
+  font-family: var(--font-display);
+  cursor: pointer;
+  border: none;
+}
+
+button:focus-visible,
+a:focus-visible,
+[tabindex]:focus-visible {
+  outline: 3px solid var(--sand);
+  outline-offset: 3px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  * { animation-duration: 0.01ms !important; animation-iteration-count: 1 !important; transition-duration: 0.01ms !important; }
+}
