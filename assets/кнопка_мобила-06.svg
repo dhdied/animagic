@@ -1,0 +1,27 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg id="_Слой_1" data-name="Слой 1" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 412.62 200.5">
+  <defs>
+    <style>
+      .cls-1 {
+        fill: #fff;
+        font-family: SFPro-Light, 'SF Pro';
+        font-size: 50.98px;
+        font-variation-settings: 'wdth' 100, 'opsz' 28, 'wght' 274;
+        font-weight: 300;
+      }
+
+      .cls-2 {
+        letter-spacing: -.02em;
+      }
+
+      .cls-3 {
+        letter-spacing: -.01em;
+      }
+
+      .cls-4 {
+        letter-spacing: 0em;
+      }
+    </style>
+  </defs>
+  <text class="cls-1" transform="translate(59.28 84.01)"><tspan x="0" y="0">Заг</tspan><tspan class="cls-3" x="75.83" y="0">р</tspan><tspan x="103.19" y="0">уз</tspan><tspan class="cls-3" x="150.56" y="0">к</tspan><tspan x="173.79" y="0">а </tspan><tspan x="0" y="61.18">изоб</tspan><tspan class="cls-4" x="105.25" y="61.18">р</tspan><tspan x="133.21" y="61.18">а</tspan><tspan class="cls-2" x="158.95" y="61.18">ж</tspan><tspan x="194.85" y="61.18">ения</tspan></text>
+</svg>

@@ -7,8 +7,38 @@ const canvas3d = document.getElementById("scene3d");
 const statusDot = document.getElementById("statusDot");
 const hint = document.getElementById("hint");
 const emptyMsg = document.getElementById("emptyMsg");
+const dayNightBtn = document.getElementById("dayNightBtn");
 
 const reducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+
+// ---------------------------------------------------------------
+// Day/Night State & Lerp Utils
+// ---------------------------------------------------------------
+let isNight = true;
+let timeFactor = 1.0; // 1.0 = Ночь, 0.0 = День
+
+dayNightBtn.addEventListener("click", () => {
+  isNight = !isNight;
+  dayNightBtn.textContent = isNight ? "🌙" : "☀️";
+});
+
+function lerp(a, b, t) {
+  return a + (b - a) * t;
+}
+
+function lerpColor(c1, c2, t) {
+  const hex1 = parseInt(c1.replace('#', ''), 16);
+  const hex2 = parseInt(c2.replace('#', ''), 16);
+  
+  const r1 = (hex1 >> 16) & 255, g1 = (hex1 >> 8) & 255, b1 = hex1 & 255;
+  const r2 = (hex2 >> 16) & 255, g2 = (hex2 >> 8) & 255, b2 = hex2 & 255;
+  
+  const r = Math.round(r1 + (r2 - r1) * t);
+  const g = Math.round(g1 + (g2 - g1) * t);
+  const b = Math.round(b1 + (b2 - b1) * t);
+  
+  return `#${(1 << 24 | r << 16 | g << 8 | b).toString(16).slice(1)}`;
+}
 
 // ---------------------------------------------------------------
 // Three.js 3D setup
@@ -18,25 +48,83 @@ renderer3d.setPixelRatio(Math.min(window.devicePixelRatio, 2));
 renderer3d.setClearColor(0x000000, 0);
 
 const scene3d = new THREE.Scene();
-
-// Ambient + directional light so the textured model isn't black
 const ambientLight = new THREE.AmbientLight(0xffffff, 0.7);
 scene3d.add(ambientLight);
-const dirLight = new THREE.DirectionalLight(0xffffff, 0.6);
-dirLight.position.set(0.3, 0.8, 1);
+const dirLight = new THREE.DirectionalLight(0xb4befe, 0.8);
+dirLight.position.set(0.5, 1, 0.5);
 scene3d.add(dirLight);
 
-// Orthographic camera — maps pixel coords 1:1.
-// Blender default export: Y up, fish faces -Y.
-// We rotate the model in AnimatedFish3D to face +X on screen.
 const camera3d = new THREE.OrthographicCamera(0, 1, 1, 0, 0.1, 1000);
 camera3d.position.set(0, 0, 10);
 camera3d.lookAt(0, 0, 0);
 
-// FBXLoader singleton — we reuse it for all fish
 const fbxLoader = new FBXLoader();
 
 let W = 0, H = 0;
+
+// === СИСТЕМА ДЕКОРАЦИЙ ===
+let bubbles = [];
+let plankton = [];
+let flora = [];
+let lightRays = [];
+
+function initEnvironment() {
+  bubbles = Array.from({ length: 35 }, () => ({
+    x: Math.random(), 
+    y: Math.random(),
+    r: 1.5 + Math.random() * 4,
+    speed: 15 + Math.random() * 25,
+    wobble: Math.random() * Math.PI * 2,
+  }));
+
+  plankton = Array.from({ length: 150 }, () => ({
+    x: Math.random(),
+    y: Math.random(),
+    size: 0.5 + Math.random() * 1.5,
+    speedX: (Math.random() - 0.5) * 0.0005,
+    speedY: -0.0005 - Math.random() * 0.001,
+    phase: Math.random() * Math.PI * 2,
+    color: Math.random() > 0.5 ? '#b4befe' : '#cba6f7'
+  }));
+
+  lightRays = Array.from({ length: 6 }, (_, i) => ({
+    baseX: (i / 5) + (Math.random() * 0.2 - 0.1),
+    width: 0.05 + Math.random() * 0.15,
+    angle: 0.15 + Math.random() * 0.2,
+    phase: Math.random() * Math.PI * 2,
+    speed: 0.0002 + Math.random() * 0.0003
+  }));
+
+  flora = [];
+  const numFlora = Math.floor(W / 45); 
+  for(let i = 0; i < numFlora; i++) {
+    const isGlowing = Math.random() > 0.7;
+    const strands = [];
+    const numStrands = 2 + Math.floor(Math.random() * 3);
+    
+    for(let s = 0; s < numStrands; s++) {
+      strands.push({
+        offsetX: (Math.random() - 0.5) * 20,
+        height: 80 + Math.random() * 120,
+        phase: Math.random() * Math.PI * 2,
+        swayAmt: 10 + Math.random() * 15
+      });
+    }
+    
+    // Задаем уникальные цвета для ночи и дня
+    const nColor = isGlowing ? (Math.random() > 0.5 ? '#cba6f7' : '#b4befe') : '#1e3846';
+    const dColor = isGlowing ? (Math.random() > 0.5 ? '#8bd450' : '#4ade80') : '#2d6a4f';
+
+    flora.push({
+      x: (W / numFlora) * i + (Math.random() * 30 - 15),
+      isGlowing: isGlowing,
+      nightColor: nColor,
+      dayColor: dColor,
+      strands: strands
+    });
+  }
+}
+
 function resize() {
   W = canvas.width = window.innerWidth;
   H = canvas.height = window.innerHeight;
@@ -46,98 +134,185 @@ function resize() {
   camera3d.top = H;
   camera3d.bottom = 0;
   camera3d.updateProjectionMatrix();
+  initEnvironment();
 }
 window.addEventListener("resize", resize);
 resize();
 
 // ---------------------------------------------------------------
-// Background dressing: bubbles, light rays, sand, seaweed
+// Advanced Background Rendering
 // ---------------------------------------------------------------
-const bubbles = Array.from({ length: 28 }, () => ({
-  x: Math.random() * 1, // normalized 0..1, scaled at draw time
-  y: Math.random(),
-  r: 2 + Math.random() * 5,
-  speed: 10 + Math.random() * 22,
-  wobble: Math.random() * Math.PI * 2,
-}));
-
 function drawBackground(t) {
-  const grad = ctx.createLinearGradient(0, 0, 0, H);
-  grad.addColorStop(0, "#0a4a63");
-  grad.addColorStop(0.55, "#073a54");
-  grad.addColorStop(1, "#03202f");
-  ctx.fillStyle = grad;
+  // Плавная интерполяция времени суток (учитывает DeltaTime через кадры)
+  const targetFactor = isNight ? 1.0 : 0.0;
+  timeFactor += (targetFactor - timeFactor) * 0.03;
+
+  // 1. Интерполяция градиентов океана
+  const bgTop = lerpColor("#2dc2d1", "#1c2b3e", timeFactor);
+  const bgMid = lerpColor("#1085ab", "#0f1722", timeFactor);
+  const bgBot = lerpColor("#054a70", "#070a10", timeFactor);
+
+  const bgGrad = ctx.createRadialGradient(W * 0.5, -H * 0.2, 0, W * 0.5, 0, H * 1.2);
+  bgGrad.addColorStop(0, bgTop); 
+  bgGrad.addColorStop(0.4, bgMid); 
+  bgGrad.addColorStop(1, bgBot); 
+  ctx.fillStyle = bgGrad;
   ctx.fillRect(0, 0, W, H);
 
-  // Light rays
+  // 2. Объемные лучи света (Меняют цвет от теплого к холодному)
   if (!reducedMotion) {
     ctx.save();
-    ctx.globalAlpha = 0.06;
-    for (let i = 0; i < 5; i++) {
-      const baseX = (W / 5) * i + Math.sin(t * 0.0002 + i) * 60;
-      const rg = ctx.createLinearGradient(baseX, 0, baseX + 120, H * 0.9);
-      rg.addColorStop(0, "#EAF7F7");
-      rg.addColorStop(1, "transparent");
-      ctx.fillStyle = rg;
+    ctx.globalCompositeOperation = 'screen'; 
+    
+    const rayR = Math.round(lerp(255, 180, timeFactor));
+    const rayG = Math.round(lerp(250, 190, timeFactor));
+    const rayB = Math.round(lerp(220, 254, timeFactor));
+    const maxAlpha = lerp(0.15, 0.08, timeFactor); // Днем лучи ярче
+
+    lightRays.forEach(ray => {
+      const sway = Math.sin(t * ray.speed + ray.phase) * (W * 0.1);
+      const startX = ray.baseX * W + sway;
+      const topWidth = ray.width * W;
+      const bottomWidth = topWidth * 3; 
+      const endX = startX + (ray.angle * W);
+
+      const rayGrad = ctx.createLinearGradient(0, 0, 0, H * 0.8);
+      rayGrad.addColorStop(0, `rgba(${rayR}, ${rayG}, ${rayB}, ${maxAlpha})`); 
+      rayGrad.addColorStop(1, `rgba(${rayR}, ${rayG}, ${rayB}, 0)`);
+
+      ctx.fillStyle = rayGrad;
       ctx.beginPath();
-      ctx.moveTo(baseX - 40, 0);
-      ctx.lineTo(baseX + 120, 0);
-      ctx.lineTo(baseX + 40, H * 0.9);
-      ctx.lineTo(baseX - 160, H * 0.9);
+      ctx.moveTo(startX - topWidth/2, 0);
+      ctx.lineTo(startX + topWidth/2, 0);
+      ctx.lineTo(endX + bottomWidth/2, H * 0.8);
+      ctx.lineTo(endX - bottomWidth/2, H * 0.8);
       ctx.closePath();
       ctx.fill();
-    }
+    });
     ctx.restore();
   }
 
-  // Bubbles
+  // 3. Планктон (Днем почти полностью исчезает)
+  if (!reducedMotion) {
+    ctx.save();
+    plankton.forEach(p => {
+      p.x += p.speedX;
+      p.y += p.speedY;
+      if(p.y < 0) { p.y = 1; p.x = Math.random(); }
+      if(p.x < 0) p.x = 1;
+      if(p.x > 1) p.x = 0;
+
+      // Умножаем на timeFactor: ночью планктон виден, днем - нет
+      const alpha = (Math.sin(t * 0.002 + p.phase) * 0.5 + 0.5) * 0.6 * timeFactor;
+      ctx.globalAlpha = alpha;
+      ctx.fillStyle = p.color;
+      ctx.beginPath();
+      ctx.arc(p.x * W, p.y * H, p.size, 0, Math.PI * 2);
+      ctx.fill();
+    });
+    ctx.restore();
+  }
+
+  // 4. Реалистичные пузырьки 
   ctx.save();
-  ctx.strokeStyle = "rgba(234,247,247,0.35)";
-  ctx.lineWidth = 1.2;
-  for (const b of bubbles) {
+  ctx.lineWidth = 1;
+  bubbles.forEach(b => {
     const speedFactor = reducedMotion ? 0 : 1;
     b.y -= (b.speed / H) * 0.016 * speedFactor;
     if (b.y < -0.05) { b.y = 1.05; b.x = Math.random(); }
-    const wobbleX = reducedMotion ? 0 : Math.sin(t * 0.002 + b.wobble) * 6;
+    const wobbleX = reducedMotion ? 0 : Math.sin(t * 0.002 + b.wobble) * (W * 0.005);
+    
+    const bx = b.x * W + wobbleX;
+    const by = b.y * H;
+
+    ctx.strokeStyle = "rgba(255, 255, 255, 0.2)";
     ctx.beginPath();
-    ctx.arc(b.x * W + wobbleX, b.y * H, b.r, 0, Math.PI * 2);
+    ctx.arc(bx, by, b.r, 0, Math.PI * 2);
     ctx.stroke();
-  }
+
+    ctx.strokeStyle = "rgba(255, 255, 255, 0.7)";
+    ctx.beginPath();
+    ctx.arc(bx, by, b.r * 0.7, Math.PI * 1.1, Math.PI * 1.5);
+    ctx.stroke();
+  });
   ctx.restore();
 
-  // Sand + dunes
-  const sandTop = H * 0.9;
-  const sandGrad = ctx.createLinearGradient(0, sandTop, 0, H);
-  sandGrad.addColorStop(0, "#1b5a3f");
-  sandGrad.addColorStop(0.15, "#C9A15A");
-  sandGrad.addColorStop(1, "#8a6d3a");
-  ctx.fillStyle = sandGrad;
-  ctx.beginPath();
-  ctx.moveTo(0, sandTop + 10);
-  for (let x = 0; x <= W; x += W / 10) {
-    ctx.quadraticCurveTo(x + W / 20, sandTop - 6, x + W / 10, sandTop + 8);
-  }
-  ctx.lineTo(W, H);
-  ctx.lineTo(0, H);
-  ctx.closePath();
-  ctx.fill();
+  // 5. Многослойное дно (Теплый песок днем, темный ночью)
+  const bgSandDayTop = "#d4a373", bgSandDayBot = "#b5835a";
+  const bgSandNightTop = "#0b1219", bgSandNightBot = "#05080c";
+  
+  const fgSandDayTop = "#e9c496", fgSandDayBot = "#c99b6d";
+  const fgSandNightTop = "#131e2a", fgSandNightBot = "#090d14";
 
-  // Seaweed
-  ctx.strokeStyle = "rgba(30,110,60,0.6)";
-  ctx.lineWidth = 6;
-  ctx.lineCap = "round";
-  for (let i = 0; i < 5; i++) {
-    const bx = W * (0.08 + i * 0.21);
-    const sway = reducedMotion ? 0 : Math.sin(t * 0.0012 + i) * 18;
-    ctx.beginPath();
-    ctx.moveTo(bx, sandTop + 12);
-    ctx.quadraticCurveTo(bx + sway, sandTop - 40, bx + sway * 0.5, sandTop - 85);
-    ctx.stroke();
+  const sandTopBg = H * 0.88;
+  const bgSandGrad = ctx.createLinearGradient(0, sandTopBg, 0, H);
+  bgSandGrad.addColorStop(0, lerpColor(bgSandDayTop, bgSandNightTop, timeFactor));
+  bgSandGrad.addColorStop(1, lerpColor(bgSandDayBot, bgSandNightBot, timeFactor));
+  ctx.fillStyle = bgSandGrad;
+  ctx.beginPath();
+  ctx.moveTo(0, sandTopBg + 20);
+  for (let x = 0; x <= W; x += W / 5) {
+    ctx.quadraticCurveTo(x + W / 10, sandTopBg - 15, x + W / 5, sandTopBg + 20);
   }
+  ctx.lineTo(W, H); ctx.lineTo(0, H); ctx.fill();
+
+  const sandTopFg = H * 0.92;
+  const fgSandGrad = ctx.createLinearGradient(0, sandTopFg, 0, H);
+  fgSandGrad.addColorStop(0, lerpColor(fgSandDayTop, fgSandNightTop, timeFactor));
+  fgSandGrad.addColorStop(1, lerpColor(fgSandDayBot, fgSandNightBot, timeFactor));
+  ctx.fillStyle = fgSandGrad;
+  ctx.beginPath();
+  ctx.moveTo(0, sandTopFg);
+  for (let x = -W/10; x <= W; x += W / 4) {
+    ctx.quadraticCurveTo(x + W / 8, sandTopFg - 25, x + W / 4, sandTopFg + 5);
+  }
+  ctx.lineTo(W, H); ctx.lineTo(0, H); ctx.fill();
+
+  // 6. Флора (Светится только ночью)
+  ctx.save();
+  ctx.lineCap = "round";
+  ctx.lineJoin = "round";
+  flora.forEach(plant => {
+    ctx.lineWidth = plant.isGlowing ? 2.5 : 4;
+    
+    // Плавный переход цвета
+    const currentColor = lerpColor(plant.dayColor, plant.nightColor, timeFactor);
+    ctx.strokeStyle = currentColor;
+    
+    if (plant.isGlowing) {
+      // Свечение работает только ночью (timeFactor -> 1)
+      ctx.shadowBlur = 12 * timeFactor; 
+      ctx.shadowColor = currentColor;
+    } else {
+      ctx.shadowBlur = 0;
+    }
+
+    plant.strands.forEach(strand => {
+      ctx.beginPath();
+      for (let y = H + 20; y >= H - strand.height; y -= 8) {
+        const tPos = (H + 20 - y) / strand.height; 
+        const sway = Math.sin(t * 0.0015 - tPos * 3 + strand.phase) * (strand.swayAmt * tPos);
+        const px = plant.x + strand.offsetX + sway;
+        if (y === H + 20) ctx.moveTo(px, y);
+        else ctx.lineTo(px, y);
+      }
+      ctx.stroke();
+    });
+  });
+  ctx.restore();
+
+  // 7. Обновление освещения 3D-моделей
+  ambientLight.intensity = lerp(1.1, 0.7, timeFactor); // Днем ярче
+  dirLight.intensity = lerp(1.2, 0.8, timeFactor);
+  
+  // Three.js lerpColors
+  const dLightDay = new THREE.Color(0xfff9e6);
+  const dLightNight = new THREE.Color(0xb4befe);
+  dirLight.color.lerpColors(dLightDay, dLightNight, timeFactor);
 }
 
 // ---------------------------------------------------------------
-// Food
+// Food 
 // ---------------------------------------------------------------
 const foods = [];
 canvas.addEventListener("pointerdown", (e) => {
@@ -151,25 +326,31 @@ function updateAndDrawFood(t) {
     const f = foods[i];
     const age = t - f.born;
     if (age > 12000) { foods.splice(i, 1); continue; }
-    f.sink += 0.15;
-    ctx.globalAlpha = Math.max(0, 1 - age / 12000);
-    ctx.fillStyle = "#F2C14E";
+    f.sink += 0.12; 
+    
+    const alpha = Math.max(0, 1 - age / 12000);
+    ctx.globalAlpha = alpha;
+    
+    ctx.shadowBlur = 15;
+    ctx.shadowColor = "#F2C14E";
+    ctx.fillStyle = "#fff5d1";
     ctx.beginPath();
-    ctx.arc(f.x, f.y + f.sink, 5, 0, Math.PI * 2);
+    ctx.arc(f.x, f.y + f.sink, 4, 0, Math.PI * 2);
     ctx.fill();
+    ctx.shadowBlur = 0; 
   }
   ctx.restore();
 }
 
 // ---------------------------------------------------------------
-// Fish — smooth, omnidirectional movement
+// Fish
 // ---------------------------------------------------------------
 const EAT_RADIUS = 34;
 const ATTRACT_RADIUS = 420;
-const TURN_RATE = 4.5;   // рад/с, ограничение скорости поворота
-const ACCEL = 280;       // px/с², разгон к целевой скорости
+const TURN_RATE = 4.5;
+const ACCEL = 280;
 const MARGIN = 60;
-const MAX_FISH = 40;     // мягкий лимит, чтобы стена не захлёбывалась
+const MAX_FISH = 40;
 
 const fish = [];
 
@@ -186,18 +367,14 @@ class Fish {
 
     this.x = Math.random() * W * 0.6 + W * 0.2;
     this.y = Math.random() * H * 0.5 + H * 0.15;
-    // текущий вектор движения (направление + скорость)
     this.vx = (Math.random() - 0.5) * this.speedBase;
     this.vy = (Math.random() - 0.5) * this.speedBase * 0.4;
-    // целевой вектор, к которому плавно стремимся
     this.tvx = this.vx;
     this.tvy = this.vy;
-    // угол, в который «смотрит» рыбка (для отражения спрайта)
     this.angle = Math.atan2(this.vy, this.vx);
     this.facing = this.vx >= 0 ? 1 : -1;
     this.pulse = 0;
 
-    // параметры паттернов
     this.baseY = this.y;
     this.dir = Math.random() < 0.5 ? -1 : 1;
     this.phase = Math.random() * Math.PI * 2;
@@ -225,14 +402,12 @@ class Fish {
     return best;
   }
 
-  // установить целевой вектор движения с ограничением по углу
   setTarget(vx, vy) {
     const len = Math.hypot(vx, vy) || 1;
     this.tvx = (vx / len) * Math.min(len, this.speedBase * 1.8);
     this.tvy = (vy / len) * Math.min(len, this.speedBase * 1.8);
   }
 
-  // плавный поворот: vx/vy двигаются к tvx/tvy с ограничением ускорения
   steer(dt) {
     const dx = this.tvx - this.vx;
     const dy = this.tvy - this.vy;
@@ -247,11 +422,9 @@ class Fish {
     }
   }
 
-  // мягкий разворот угла рыбки в сторону вектора скорости
   faceVelocity(dt) {
     const target = Math.atan2(this.vy, this.vx);
     let diff = target - this.angle;
-    // нормализуем разницу углов к [-π, π]
     while (diff > Math.PI) diff -= Math.PI * 2;
     while (diff < -Math.PI) diff += Math.PI * 2;
     const maxStep = TURN_RATE * dt;
@@ -261,7 +434,6 @@ class Fish {
   }
 
   keepInBounds() {
-    // отскок от стен — задаём целевой вектор вглубь сцены
     if (this.x < MARGIN)             this.setTarget( Math.abs(this.tvx) || this.speedBase, this.tvy);
     if (this.x > W - MARGIN)         this.setTarget(-Math.abs(this.tvx) || -this.speedBase, this.tvy);
     if (this.y < MARGIN)             this.setTarget(this.tvx,  Math.abs(this.tvy) || this.speedBase * 0.4);
@@ -272,7 +444,6 @@ class Fish {
     const foodIdx = this.targetFood();
 
     if (foodIdx >= 0) {
-      // к еде — едем в её сторону на повышенной скорости
       const f = foods[foodIdx];
       const tx = f.x - this.x;
       const ty = (f.y + f.sink) - this.y;
@@ -284,23 +455,19 @@ class Fish {
         this.pulse = 1;
       }
     } else if (this.pattern === "sine") {
-      // синусоида по X, мягкое покачивание по Y
       this.dir = this.x < MARGIN ? 1 : (this.x > W - MARGIN ? -1 : this.dir);
       this.phase += dt * 1.6;
       this.setTarget(this.dir * this.speedBase, Math.cos(this.phase) * this.speedBase * 0.6);
     } else if (this.pattern === "circle") {
-      // движение по кругу с медленным дрейфом центра
       this.circleAngle += this.angularSpeed * dt;
       this.cx += Math.cos(performance.now() * 0.00007 + this.id.length) * 6 * dt;
       this.cy += Math.sin(performance.now() * 0.00005) * 4 * dt;
       this.cx = Math.min(Math.max(this.cx, this.radius + 40), W - this.radius - 40);
       this.cy = Math.min(Math.max(this.cy, this.radius + 40), H * 0.8 - this.radius);
-      // целевой вектор — касательная к окружности
       const tx = -Math.sin(this.circleAngle) * this.angularSpeed;
       const ty =  Math.cos(this.circleAngle) * this.angularSpeed * 0.6;
       this.setTarget(tx * this.speedBase, ty * this.speedBase);
     } else if (this.pattern === "free") {
-      // свободное движение в любом направлении: иногда меняем курс плавно
       this.wanderTimer -= dt;
       if (this.wanderTimer <= 0) {
         this.wanderTimer = 1.5 + Math.random() * 3;
@@ -311,7 +478,6 @@ class Fish {
         Math.sin(this.wanderDir) * this.speedBase * 0.55
       );
     } else {
-      // классический wander
       this.wanderAngle += (Math.random() - 0.5) * 1.4 * dt;
       this.setTarget(
         Math.cos(this.wanderAngle) * this.speedBase,
@@ -335,27 +501,23 @@ class Fish {
     const aspect = this.img.naturalWidth / this.img.naturalHeight;
     const h = baseH;
     const w = baseH * aspect;
-    // лёгкое «дыхание» корпуса при плавании
     const wiggle = reducedMotion ? 0 : Math.sin(t * 0.006 + this.x * 0.01) * 0.06;
 
     ctx.save();
     ctx.translate(this.x, this.y);
     ctx.rotate(this.angle);
-    // Спрайт нарисован головой влево (-X). Всегда отражаем по X,
-    // чтобы голова смотрела в +X (вперёд по движению). При движении
-    // влево (facing<0) rotate(π) переворачивает спину вниз —
-    // компенсируем отражением по Y.
     ctx.scale(-1, this.facing >= 0 ? 1 : -1);
-    // наклон от wiggle добавляем, только если он смотрит вперёд
     ctx.rotate(wiggle * this.facing);
+    
+    ctx.shadowColor = "rgba(0, 0, 0, 0.4)";
+    ctx.shadowBlur = 10;
+    ctx.shadowOffsetY = 5;
+    
     ctx.drawImage(this.img, -w / 2, -h / 2, w, h);
     ctx.restore();
   }
 }
 
-// ---------------------------------------------------------------
-// WebSocket
-// ---------------------------------------------------------------
 function connectWS() {
   const proto = location.protocol === "https:" ? "wss" : "ws";
   const ws = new WebSocket(`${proto}://${location.host}/ws/wall`);
@@ -385,10 +547,6 @@ function connectWS() {
 }
 connectWS();
 
-// ---------------------------------------------------------------
-// Animated 3D Fish — FBX model + scanned texture + animation
-// ---------------------------------------------------------------
-
 const fish3d = [];
 
 class AnimatedFish3D {
@@ -398,9 +556,8 @@ class AnimatedFish3D {
     this.speedBase = 55 * (data.speed || 1);
     this.scaleMul = data.scale || 1;
     this.fbxUrl = data.fbx_url;
-    this.textureImage = data.image; // base64 data URL
+    this.textureImage = data.image; 
 
-    // Movement state — same as 2D Fish
     this.x = Math.random() * W * 0.6 + W * 0.2;
     this.y = Math.random() * H * 0.5 + H * 0.15;
     this.vx = (Math.random() - 0.5) * this.speedBase;
@@ -424,9 +581,8 @@ class AnimatedFish3D {
     this.wanderDir = this.wanderAngle;
     this.eatingFoodIndex = -1;
 
-    // 3D state
     this.group = new THREE.Group();
-    this.group.visible = false; // hidden until loaded
+    this.group.visible = false; 
     this.model = null;
     this.animationMixer = null;
     this.animationAction = null;
@@ -442,7 +598,6 @@ class AnimatedFish3D {
       const model = await fbxLoader.loadAsync(this.fbxUrl);
       this.model = model;
 
-      // Apply the scanned texture to all mesh materials
       const textureImg = new Image();
       await new Promise((resolve, reject) => {
         textureImg.onload = resolve;
@@ -457,7 +612,6 @@ class AnimatedFish3D {
 
       model.traverse((child) => {
         if (child.isMesh && child.material) {
-          // Handle both single material and material array
           const materials = Array.isArray(child.material) ? child.material : [child.material];
           for (const mat of materials) {
             mat.map = texture;
@@ -469,22 +623,18 @@ class AnimatedFish3D {
         }
       });
 
-      // Play skeleton animation if present
       if (model.animations && model.animations.length > 0) {
         this.animationMixer = new THREE.AnimationMixer(model);
         this.animationAction = this.animationMixer.clipAction(model.animations[0]);
         this.animationAction.play();
       }
 
-      // Scale: FBX from Blender is in meters; fish should be ~120px tall on screen
       const targetHeight = 120 * this.scaleMul;
       const box = new THREE.Box3().setFromObject(model);
       const modelH = box.max.y - box.min.y || 1;
       const s = targetHeight / modelH;
       model.scale.set(s, s, s);
 
-      // Rotate model so it faces +X (right) on screen.
-      // Blender FBX: fish faces -Y in local space. Rotate 90° around Z → faces +X.
       model.rotation.z = Math.PI / 2;
 
       this.group.add(model);
@@ -492,14 +642,13 @@ class AnimatedFish3D {
       this.ready = true;
       this._syncPosition();
     } catch (err) {
-      console.warn("Failed to load 3D model for fish", this.id, err);
+      console.warn("Failed to load 3D model", err);
       this.dead = true;
       scene3d.remove(this.group);
     }
   }
 
   _syncPosition() {
-    // Flip Y: 2D canvas has Y down, but Three.js camera has Y up
     this.group.position.set(this.x, H - this.y, 0);
     this.group.rotation.z = -this.angle;
   }
@@ -607,7 +756,6 @@ class AnimatedFish3D {
 
     this._syncPosition();
 
-    // Update animation mixer
     if (this.animationMixer) {
       this.animationMixer.update(dt);
     }
@@ -625,13 +773,9 @@ function frame(t) {
   drawBackground(t);
   updateAndDrawFood(t);
 
-  // Update & draw 2D fish
   for (const f of fish) { f.update(dt); f.draw(t); }
-
-  // Update 3D fish (skip dead ones that failed to load)
   for (const f of fish3d) { if (!f.dead) f.update(dt); }
 
-  // Render 3D scene on top (transparent background, only fish visible)
   renderer3d.render(scene3d, camera3d);
 
   requestAnimationFrame(frame);

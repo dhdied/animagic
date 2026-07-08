@@ -6,59 +6,140 @@
 <title>Подводная стена — Fish Wall</title>
 <link rel="stylesheet" href="/static/style.css">
 <style>
-  html, body { overflow: hidden; background: var(--deep); }
+  html, body { 
+    overflow: hidden; 
+    background-color: #0d0e15; 
+    margin: 0;
+    padding: 0;
+  }
+  
   #scene3d { position: fixed; inset: 0; width: 100vw; height: 100vh; pointer-events: none; z-index: 1; }
   #scene { display: block; width: 100vw; height: 100vh; touch-action: none; position: fixed; inset: 0; z-index: 0; }
 
+  /* === ПРЕМИАЛЬНЫЙ HUD === */
   .hud {
-    position: fixed; top: 18px; left: 22px;
+    position: fixed; 
+    top: 24px; 
+    left: 24px;
     font-family: var(--font-display);
     font-weight: 700;
     font-size: 20px;
-    color: rgba(234,247,247,0.85);
-    text-shadow: 0 2px 10px rgba(0,0,0,0.4);
-    display: flex; align-items: center; gap: 10px;
-    pointer-events: none;
+    color: rgba(255, 255, 255, 0.9);
+    background: rgba(18, 18, 28, 0.4);
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+    border: 1px solid rgba(180, 190, 254, 0.15); 
+    padding: 8px 12px 8px 24px; /* Немного изменили отступы для кнопки */
+    border-radius: 999px;
+    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.3);
+    display: flex; 
+    align-items: center; 
+    gap: 14px;
+    z-index: 10;
   }
-  .dot { width: 10px; height: 10px; border-radius: 50%; background: #E1523F; box-shadow: 0 0 8px currentColor; }
-  .dot.online { background: #7EE7B8; }
+  
+  .dot { 
+    width: 12px; 
+    height: 12px; 
+    border-radius: 50%; 
+    background: #FF6F59; 
+    box-shadow: 0 0 12px #FF6F59; 
+  }
+  .dot.online { 
+    background: #a6e3a1; 
+    box-shadow: 0 0 12px rgba(166, 227, 161, 0.6); 
+  }
 
+  /* Кнопка смены времени суток */
+  .time-toggle {
+    background: rgba(255, 255, 255, 0.08);
+    border: 1px solid rgba(255, 255, 255, 0.15);
+    color: #fff;
+    border-radius: 50%;
+    width: 38px; height: 38px;
+    display: flex; align-items: center; justify-content: center;
+    cursor: pointer; transition: all 0.3s ease;
+    font-size: 16px;
+    pointer-events: auto; /* Чтобы кнопка нажималась сквозь hud */
+  }
+  .time-toggle:hover { 
+    background: rgba(255, 255, 255, 0.2); 
+    transform: scale(1.08); 
+  }
+
+  /* === ПУЛЬСИРУЮЩАЯ ПОДСКАЗКА === */
   .hint {
-    position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%);
-    font-family: var(--font-body); font-weight: 700; font-size: 14px;
-    color: rgba(234,247,247,0.65);
-    background: rgba(2,22,32,0.45);
-    padding: 8px 16px; border-radius: 999px;
+    position: fixed; 
+    bottom: 30px; 
+    left: 50%; 
+    transform: translateX(-50%);
+    font-family: var(--font-body); 
+    font-weight: 700; 
+    font-size: 15px;
+    color: rgba(255, 255, 255, 0.85);
+    background: rgba(18, 18, 28, 0.5);
+    backdrop-filter: blur(16px);
+    -webkit-backdrop-filter: blur(16px);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    padding: 12px 24px; 
+    border-radius: 999px;
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
     pointer-events: none;
-    transition: opacity 0.6s ease;
+    animation: floatHint 4s ease-in-out infinite;
+    z-index: 10;
+  }
+
+  @keyframes floatHint {
+    0%, 100% { transform: translate(-50%, 0); }
+    50% { transform: translate(-50%, -10px); }
   }
 
   .empty-msg {
     position: fixed; inset: 0;
     display: flex; align-items: center; justify-content: center;
-    flex-direction: column; gap: 10px;
+    flex-direction: column; gap: 12px;
     pointer-events: none;
     text-align: center;
     padding: 40px;
+    z-index: 5;
   }
-  .empty-msg h2 { font-family: var(--font-display); font-size: clamp(22px, 4vw, 34px); margin: 0; }
-  .empty-msg p { margin: 0; opacity: 0.75; font-size: 16px; }
+  
+  .empty-msg h2 { 
+    font-family: var(--font-display); 
+    font-size: clamp(28px, 5vw, 42px); 
+    margin: 0; 
+    color: rgba(255, 255, 255, 0.9);
+    text-shadow: 0 4px 20px rgba(0,0,0,0.5);
+  }
+  .empty-msg p { 
+    margin: 0; 
+    color: rgba(180, 190, 254, 0.8); 
+    font-size: 18px; 
+    font-weight: 600;
+  }
 </style>
 </head>
 <body>
 <canvas id="scene3d"></canvas>
 <canvas id="scene"></canvas>
-<div class="hud"><span class="dot" id="statusDot"></span><span>Подводная стена</span></div>
-<div class="hint" id="hint">🍤 Нажми на воду, чтобы покормить рыбок</div>
-<div class="empty-msg" id="emptyMsg">
-  <h2>🐟 Пока здесь пусто</h2>
-  <p>Открой «Сканер» на телефоне, нарисуй рыбку и отправь её сюда</p>
+
+<div class="hud">
+  <span class="dot" id="statusDot"></span>
+  <span>Анимагия: Океан</span>
+  <button id="dayNightBtn" class="time-toggle">🌙</button>
 </div>
+
+<div class="hint" id="hint">✨ Коснись воды, чтобы создать светящийся корм</div>
+<div class="empty-msg" id="emptyMsg">
+  <h2>Океан ждет</h2>
+  <p>Загрузи первую рыбку со своего сканера</p>
+</div>
+
 <script type="importmap">
 {
   "imports": {
-    "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js",
-    "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/"
+    "three": "https://unpkg.com/three@0.160.0/build/three.module.js",
+    "three/addons/": "https://unpkg.com/three@0.160.0/examples/jsm/"
   }
 }
 </script>
