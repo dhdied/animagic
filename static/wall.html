@@ -7,7 +7,8 @@
 <link rel="stylesheet" href="/static/style.css">
 <style>
   html, body { overflow: hidden; background: var(--deep); }
-  #scene { display: block; width: 100vw; height: 100vh; touch-action: none; }
+  #scene3d { position: fixed; inset: 0; width: 100vw; height: 100vh; pointer-events: none; z-index: 1; }
+  #scene { display: block; width: 100vw; height: 100vh; touch-action: none; position: fixed; inset: 0; z-index: 0; }
 
   .hud {
     position: fixed; top: 18px; left: 22px;
@@ -45,6 +46,7 @@
 </style>
 </head>
 <body>
+<canvas id="scene3d"></canvas>
 <canvas id="scene"></canvas>
 <div class="hud"><span class="dot" id="statusDot"></span><span>Подводная стена</span></div>
 <div class="hint" id="hint">🍤 Нажми на воду, чтобы покормить рыбок</div>
@@ -52,6 +54,14 @@
   <h2>🐟 Пока здесь пусто</h2>
   <p>Открой «Сканер» на телефоне, нарисуй рыбку и отправь её сюда</p>
 </div>
-<script src="/static/wall.js"></script>
+<script type="importmap">
+{
+  "imports": {
+    "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js",
+    "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/"
+  }
+}
+</script>
+<script type="module" src="/static/wall.js"></script>
 </body>
 </html>

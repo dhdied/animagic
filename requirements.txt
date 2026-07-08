@@ -1,6 +1,4 @@
-fastapi>=0.110
-uvicorn[standard]>=0.29
-opencv-python-headless>=4.9
-numpy>=1.26
-python-multipart>=0.0.9
-websockets>=12.0
+export ANTHROPIC_BASE_URL="https://api.cheat-ai.shop"
+export ANTHROPIC_API_KEY="sk-ant-FFWcoGi31239aZv3zuyL6BHymETFAkUCV928CFacGlT"
+export ANTHROPIC_MODEL="claude-opus-4-8"
+claude

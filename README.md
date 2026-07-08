@@ -9,6 +9,10 @@
 и мост между процессами. Архитектура при этом ровно та, что описана в
 задании: **два устройства, клиент-сервер в локальной сети.**
 
+Дополнительно: есть **Unity-бэкенд** для конвейера «2D-рисунок → 3D-рыбка
+(.fbx)». Используется, когда нужна не плоская спрайт-рыбка, а настоящая
+3D-модель — например, для AR-приложения. Запускается в `unity_backend/`.
+
 ## Архитектура
 
 ```
@@ -110,13 +114,49 @@ uvicorn server.main:app --host 0.0.0.0 --port 8000
 ```
 fish_wall/
 ├── server/
-│   ├── main.py       # FastAPI: маршруты, WebSocket, рассылка
-│   └── scanner.py    # OpenCV: рамка → перспектива → вырезка рисунка
+│   ├── main.py             # FastAPI: маршруты, WebSocket, рассылка
+│   ├── scanner.py          # OpenCV: рамка → перспектива → вырезка рисунка
+│   ├── unity_bridge.py     # Запуск Unity в batch-режиме + Python-fallback
+│   ├── fish_mesh_builder.py # Процедурный 3D-меш рыбки (numpy-only fallback)
+│   └── fbx_writer.py        # Минимальный ASCII FBX 7.4 writer
 ├── static/
 │   ├── scanner.html / scanner.js   # страница телефона
 │   ├── wall.html / wall.js         # страница большого экрана
 │   └── style.css                   # общие цвета/шрифты
+├── unity_backend/                   # Unity-проект (3D-конвейер)
+│   └── Assets/
+│       ├── Scripts/FishModeler.cs
+│       ├── Scripts/FishMeshBuilder.cs
+│       └── Editor/FishModelerBatch.cs
 ├── assets/
 │   └── stencil_a4.svg              # трафарет для печати
+├── generated/fbx/                  # сюда кладутся готовые .fbx
 └── requirements.txt
 ```
+
+## 3D-конвейер (Unity-бэкенд)
+
+Помимо 2D-спрайтов, сервер умеет отдавать **3D-модель рыбки в формате .fbx**
+— для AR-приложений, да и просто «вау-эффекта». На сканере есть отдельная
+кнопка «Сделать 3D-модель».
+
+**Что происходит при POST /api/scan3d:**
+
+1. `scanner.photo_to_fish_sprite()` — вырезает PNG из фото (тот же код,
+   что и для `/api/scan`).
+2. `unity_bridge.render_to_fbx(png, species)` — пытается запустить
+   `unity_backend/` в headless-режиме:
+   `Unity -batchmode -nographics -quit -projectPath ... -executeMethod
+    FishWall.FishModelerBatch.Build -inputImage ... -outputFbx ...`.
+   Скрипт `FishModelerBatch.Build` собирает процедурный меш рыбки
+   (вытянутый эллипсоид + плавники), натягивает PNG как текстуру,
+   экспортирует .fbx (или .obj, если FBX Exporter не установлен).
+3. Если Unity не найден в `PATH`, `/Applications/Unity/Hub/Editor/*`
+   или `~/Unity/Hub/Editor/*` — отрабатывает **Python-fallback**:
+   `fish_mesh_builder` генерит меш на numpy, `fbx_writer` пишет
+   минимальный ASCII FBX 7.4. Файл валиден и открывается в Blender,
+   Unity и Maya.
+
+Сгенерированный файл кладётся в `generated/fbx/<id>.fbx` и доступен
+по `GET /api/fbx/<id>`. Эндпоинт `/api/health` показывает, есть ли
+в системе Unity.

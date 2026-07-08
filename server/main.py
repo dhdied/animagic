@@ -23,29 +23,42 @@ http://<this-computer's-LAN-IP>:8000/scanner and .../wall
 from __future__ import annotations
 
 import base64
+import logging
 import random
+import shutil
 import uuid
 from pathlib import Path
-from typing import List
+from typing import List, Optional, Tuple
 
 from fastapi import FastAPI, UploadFile, File, Form, WebSocket, WebSocketDisconnect, HTTPException
 from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 
 from .scanner import photo_to_fish_sprite, NoFrameFoundError
+from .unity_bridge import UnityBridge, UnityUnavailableError, UnityRenderError
+
+logger = logging.getLogger("fish_wall")
 
 BASE_DIR = Path(__file__).resolve().parent.parent
 STATIC_DIR = BASE_DIR / "static"
 ASSETS_DIR = BASE_DIR / "assets"
+MODEL_DIR = BASE_DIR / "model"
+GENERATED_DIR = BASE_DIR / "generated" / "fbx"
 
 app = FastAPI(title="Fish Wall")
 
 # Species -> swim behaviour. Kept on the server so scanner and wall always
 # agree, and so adding a new species later is a one-line change.
+# "pattern" picks a steering strategy in wall.js:
+#   sine    — плавает туда-обратно с волной по Y
+#   circle  — кружится вокруг дрейфующего центра
+#   wander  — случайное блуждание с резкими поворотами
+#   free    — плавное движение в любом направлении (выбирает курс каждые
+#             1.5–4.5 с и плавно подруливает к нему через steering)
 SPECIES = {
-    "goldfish": {"label": "Золотая рыбка", "pattern": "sine", "speed": 1.0, "scale": 1.0},
-    "tropical": {"label": "Тропическая рыбка", "pattern": "circle", "speed": 1.3, "scale": 0.85},
-    "shark": {"label": "Акулёнок", "pattern": "wander", "speed": 0.8, "scale": 1.4},
+    "goldfish": {"label": "Золотая рыбка", "pattern": "free", "speed": 1.0, "scale": 1.0, "three_d": False},
+    "tropical": {"label": "Тропическая рыбка", "pattern": "circle", "speed": 1.3, "scale": 0.85, "three_d": False},
+    "shark":    {"label": "Акулёнок", "pattern": "wander", "speed": 0.9, "scale": 1.4, "three_d": True},
 }
 
 
@@ -75,6 +88,18 @@ class ConnectionManager:
 
 
 manager = ConnectionManager()
+unity_bridge = UnityBridge()
+
+
+@app.get("/api/health")
+async def health() -> dict:
+    """Lightweight liveness probe + diagnostics for the 3D backend."""
+    return {
+        "ok": True,
+        "walls_connected": len(manager.active),
+        "unity_available": unity_bridge.is_available(),
+        "unity_path": unity_bridge.unity_path,
+    }
 
 
 @app.get("/scanner")
@@ -132,6 +157,173 @@ async def scan(photo: UploadFile = File(...), species: str = Form("goldfish")):
     )
 
     return JSONResponse({"ok": True, "id": fish_id, "walls_notified": len(manager.active)})
+
+
+@app.post("/api/scan3d_animated")
+async def scan3d_animated(photo: UploadFile = File(...), species: str = Form("shark")):
+    """Принять 2D-рисунок, натянуть его как текстуру на готовую
+    анимированную модель Fish_Animated.fbx и разослать на стены.
+
+    В отличие от /api/scan3d, который *генерит* процедурный меш,
+    здесь используется заранее заготовленная модель из model/ —
+    с ригом, костями и анимацией плавания.
+
+    Сервер: копирует Fish_Animated.fbx → generated/fbx/<id>/fish.fbx,
+           кладёт текстуру рядом как fish_texture.png.
+    Стена: загружает .fbx через Three.js FBXLoader, подменяет текстуру
+           материала на отсканированный PNG и проигрывает анимацию.
+    """
+    if species not in SPECIES:
+        species = "shark"
+
+    # Проверяем, что базовая модель существует
+    base_model = MODEL_DIR / "Fish_Animated.fbx"
+    if not base_model.exists():
+        raise HTTPException(
+            status_code=503,
+            detail="Базовая 3D-модель не найдена (model/Fish_Animated.fbx)",
+        )
+
+    image_bytes = await photo.read()
+    try:
+        sprite_png = photo_to_fish_sprite(image_bytes)
+    except NoFrameFoundError as exc:
+        raise HTTPException(status_code=422, detail=str(exc))
+
+    # Копируем модель и текстуру в папку рыбки
+    fish_id = uuid.uuid4().hex[:10]
+    fish_dir = GENERATED_DIR / fish_id
+    fish_dir.mkdir(parents=True, exist_ok=True)
+
+    shutil.copy(base_model, fish_dir / "fish.fbx")
+    (fish_dir / "fish_texture.png").write_bytes(sprite_png)
+
+    meta = SPECIES[species]
+    await manager.broadcast_json(
+        {
+            "type": "new_fish_3d_animated",
+            "id": fish_id,
+            "species": species,
+            "label": meta["label"],
+            "pattern": meta["pattern"],
+            "speed": meta["speed"] * random.uniform(0.85, 1.15),
+            "scale": meta["scale"] * random.uniform(0.9, 1.1),
+            "image": "data:image/png;base64," + base64.b64encode(sprite_png).decode("ascii"),
+            "fbx_url": f"/api/fbx/{fish_id}",
+            "texture_url": f"/api/texture/{fish_id}",
+        }
+    )
+
+    return JSONResponse(
+        {
+            "ok": True,
+            "id": fish_id,
+            "walls_notified": len(manager.active),
+            "fbx_url": f"/api/fbx/{fish_id}",
+            "texture_url": f"/api/texture/{fish_id}",
+            "fbx_size": base_model.stat().st_size,
+            "rendered_with": "animated-model",
+        }
+    )
+
+
+@app.post("/api/scan3d")
+async def scan3d(photo: UploadFile = File(...), species: str = Form("shark")):
+    """Принять 2D-рисунок, отдать 3D-модель (.fbx) и разослать её стенам.
+
+    Конвейер:
+      1. scanner.photo_to_fish_sprite() — вырезать PNG с прозрачным фоном
+         (тот же код, что в /api/scan, чтобы UX сканера не менялся).
+      2. unity_bridge.render_to_fbx() — сгенерировать 3D-меш рыбки и
+         экспортировать .fbx. Если Unity не установлен, отрабатывает
+         встроенный Python-fallback (numpy-only): генерирует меш
+         «вытянутый эллипсоид + плавники» и пишет минимальный ASCII FBX.
+      3. Broadcast — стене уходит base64 PNG (для превью/2D-фолбэка) и
+         относительный URL для скачивания .fbx.
+
+    Возвращает JSON c id и ссылкой на скачивание .fbx, чтобы можно
+    было забрать файл из Unity-пайплайна (для AR-приложений и т.п.).
+    """
+    if species not in SPECIES:
+        species = "shark"
+
+    image_bytes = await photo.read()
+    try:
+        sprite_png = photo_to_fish_sprite(image_bytes)
+    except NoFrameFoundError as exc:
+        raise HTTPException(status_code=422, detail=str(exc))
+
+    try:
+        fbx_bytes, texture_png = unity_bridge.render_to_fbx(sprite_png, species=species)
+    except UnityUnavailableError as exc:
+        # Если Unity вообще не нашли — fallback внутри render_to_fbx()
+        # уже сработал и отдал bytes; эта ветка на случай, если fallback
+        # сам сломался.
+        raise HTTPException(status_code=503, detail=f"Unity недоступен: {exc}")
+    except UnityRenderError as exc:
+        raise HTTPException(status_code=500, detail=f"Ошибка Unity: {exc}")
+
+    # Сохраняем .fbx и текстуру в подпапке рыбки — FBX ссылается на
+    # текстуру по относительному пути fish_texture.png.
+    fish_id = uuid.uuid4().hex[:10]
+    fish_dir = GENERATED_DIR / fish_id
+    fish_dir.mkdir(parents=True, exist_ok=True)
+    fbx_path = fish_dir / "fish.fbx"
+    fbx_path.write_bytes(fbx_bytes)
+    (fish_dir / "fish_texture.png").write_bytes(texture_png)
+
+    meta = SPECIES[species]
+    await manager.broadcast_json(
+        {
+            "type": "new_fish_3d",
+            "id": fish_id,
+            "species": species,
+            "label": meta["label"],
+            "pattern": meta["pattern"],
+            "speed": meta["speed"] * random.uniform(0.85, 1.15),
+            "scale": meta["scale"] * random.uniform(0.9, 1.1),
+            "image": "data:image/png;base64," + base64.b64encode(sprite_png).decode("ascii"),
+            "fbx_url": f"/api/fbx/{fish_id}",
+        }
+    )
+
+    return JSONResponse(
+        {
+            "ok": True,
+            "id": fish_id,
+            "walls_notified": len(manager.active),
+            "fbx_url": f"/api/fbx/{fish_id}",
+            "fbx_size": len(fbx_bytes),
+            "rendered_with": "unity" if unity_bridge.is_available() else "python-fallback",
+        }
+    )
+
+
+@app.get("/api/fbx/{fish_id}")
+async def get_fbx(fish_id: str):
+    """Скачать сгенерированный .fbx по id рыбки."""
+    fish_dir = (GENERATED_DIR / fish_id).resolve()
+    base = GENERATED_DIR.resolve()
+    if not str(fish_dir).startswith(str(base)):
+        raise HTTPException(400, "bad id")
+    fbx_path = fish_dir / "fish.fbx"
+    if not fbx_path.exists():
+        raise HTTPException(404, "model not found")
+    return FileResponse(fbx_path, media_type="application/octet-stream",
+                        filename=f"fish_{fish_id}.fbx")
+
+
+@app.get("/api/texture/{fish_id}")
+async def get_texture(fish_id: str):
+    """Скачать текстуру рыбки (PNG)."""
+    fish_dir = (GENERATED_DIR / fish_id).resolve()
+    base = GENERATED_DIR.resolve()
+    if not str(fish_dir).startswith(str(base)):
+        raise HTTPException(400, "bad id")
+    tex_path = fish_dir / "fish_texture.png"
+    if not tex_path.exists():
+        raise HTTPException(404, "texture not found")
+    return FileResponse(tex_path, media_type="image/png")
 
 
 @app.websocket("/ws/wall")
