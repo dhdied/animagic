@@ -1,4 +1,4 @@
-# Fish Wall 🐠
+# Анимагия
 
 Ребёнок рисует рыбку на бумаге → фотографирует на телефоне → рыбка выплывает
 на большом экране в подводном мире. Рыбок можно кормить.
@@ -160,3 +160,17 @@ fish_wall/
 Сгенерированный файл кладётся в `generated/fbx/<id>.fbx` и доступен
 по `GET /api/fbx/<id>`. Эндпоинт `/api/health` показывает, есть ли
 в системе Unity.
+
+## Команда проекта
+
+[![dhdied](https://github.com/dhdied.png?size=50)](https://github.com/dhdied)
+[![m0kas1](https://github.com/m0kas1.png?size=50)](https://github.com/m0kas1)
+[![SonGodThalor](https://github.com/SonGodThalor.png?size=50)](https://github.com/SonGodThalor)
+[![anyaspivik](https://github.com/anyaspivik.png?size=50)](https://github.com/anyaspivik)
+[![quewf](https://github.com/quewf.png?size=50)](https://github.com/quewf)
+[![sashkashnur](https://github.com/sashkashnur.png?size=50)](https://github.com/sashkashnur)
+[![demonstersss](https://github.com/demonstersss.png?size=50)](https://github.com/demonstersss)
+[![exenty-p](https://github.com/exenty-p.png?size=50)](https://github.com/exenty-p)
+[![kikue322](https://github.com/kikue322.png?size=50)](https://github.com/kikue322)
+[![stepanbalakovser](https://github.com/stepanbalakovser.png?size=50)](https://github.com/stepanbalakovser)
+[![daniilsundeev2](https://github.com/daniilsundeev2.png?size=50)](https://github.com/daniilsundeev2)
