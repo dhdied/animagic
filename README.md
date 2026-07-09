@@ -163,14 +163,81 @@ fish_wall/
 
 ## Команда проекта
 
-[![dhdied](https://github.com/dhdied.png?size=50)](https://github.com/dhdied)
-[![m0kas1](https://github.com/m0kas1.png?size=50)](https://github.com/m0kas1)
-[![SonGodThalor](https://github.com/SonGodThalor.png?size=50)](https://github.com/SonGodThalor)
-[![anyaspivik](https://github.com/anyaspivik.png?size=50)](https://github.com/anyaspivik)
-[![quewf](https://github.com/quewf.png?size=50)](https://github.com/quewf)
-[![sashkashnur](https://github.com/sashkashnur.png?size=50)](https://github.com/sashkashnur)
-[![demonstersss](https://github.com/demonstersss.png?size=50)](https://github.com/demonstersss)
-[![exenty-p](https://github.com/exenty-p.png?size=50)](https://github.com/exenty-p)
-[![kikue322](https://github.com/kikue322.png?size=50)](https://github.com/kikue322)
-[![stepanbalakovser](https://github.com/stepanbalakovser.png?size=50)](https://github.com/stepanbalakovser)
-[![daniilsundeev2](https://github.com/daniilsundeev2.png?size=50)](https://github.com/daniilsundeev2)
+<table>
+  <tr>
+    <td align="center">
+      <a href="https://github.com/dhdied">
+        <img src="https://github.com/dhdied.png" width="80" alt="dhdied"/><br />
+        <sub><b>dhdied</b></sub>
+      </a>
+    </td>
+    <td align="center">
+      <a href="https://github.com/m0kas1">
+        <img src="https://github.com/m0kas1.png" width="80" alt="m0kas1"/><br />
+        <sub><b>m0kas1</b></sub>
+      </a>
+    </td>
+    <td align="center">
+      <a href="https://github.com/SonGodThalor">
+        <img src="https://github.com/SonGodThalor.png" width="80" alt="SonGodThalor"/><br />
+        <sub><b>SonGodThalor</b></sub>
+      </a>
+    </td>
+    <td align="center">
+      <a href="https://github.com/anyaspivik">
+        <img src="https://github.com/anyaspivik.png" width="80" alt="anyaspivik"/><br />
+        <sub><b>anyaspivik</b></sub>
+      </a>
+    </td>
+    <td align="center">
+      <a href="https://github.com/quewf">
+        <img src="https://github.com/quewf.png" width="80" alt="quewf"/><br />
+        <sub><b>quewf</b></sub>
+      </a>
+    </td>
+    <td align="center">
+      <a href="https://github.com/Alexandra2873">
+        <img src="https://github.com/Alexandra2873.png" width="80" alt="sashkashnur"/><br />
+        <sub><b>sashkashnur</b></sub>
+      </a>
+    </td>
+  </tr>
+  <tr>
+    <td align="center">
+      <a href="https://github.com/demonstersss">
+        <img src="https://github.com/demonstersss.png" width="80" alt="demonstersss"/><br />
+        <sub><b>demonstersss</b></sub>
+      </a>
+    </td>
+    <td align="center">
+      <a href="https://github.com/exenty-p">
+        <img src="https://github.com/exenty-p.png" width="80" alt="exenty-p"/><br />
+        <sub><b>exenty-p</b></sub>
+      </a>
+    </td>
+    <td align="center">
+      <a href="https://github.com/kikue322">
+        <img src="https://github.com/kikue322.png" width="80" alt="kikue322"/><br />
+        <sub><b>kikue322</b></sub>
+      </a>
+    </td>
+    <td align="center">
+      <a href="https://github.com/stepanbalakovser">
+        <img src="https://github.com/stepanbalakovser.png" width="80" alt="stepanbalakovser"/><br />
+        <sub><b>stepanbalakovser</b></sub>
+      </a>
+    </td>
+    <td align="center">
+      <a href="https://github.com/daniilsundeev2">
+        <img src="https://github.com/daniilsundeev2.png" width="80" alt="daniilsundeev2"/><br />
+        <sub><b>daniilsundeev2</b></sub>
+      </a>
+    </td>
+   <td align="center">
+      <a href="https://github.com/danek-shap">
+        <img src="https://github.com/danek-shap.png" width="80" alt="danek-shap"/><br />
+        <sub><b>danek-shap</b></sub>
+      </a>
+    </td>
+  </tr>
+</table>
