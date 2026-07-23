@@ -114,17 +114,6 @@ async def health() -> dict:
         "unity_path": unity_bridge.unity_path,
     }
 
-
-@app.get("/scanner")
-async def scanner_page():
-    return FileResponse(STATIC_DIR / "scanner.html")
-
-
-@app.get("/wall")
-async def wall_page():
-    return FileResponse(STATIC_DIR / "wall.html")
-
-
 @app.get("/api/species")
 async def list_species():
     return {key: {"label": v["label"]} for key, v in SPECIES.items()}
@@ -140,14 +129,6 @@ async def get_history(db: Session = Depends(get_db)):
         .all()
     )
     return [fish.payload for fish in fishes]
-
-@app.get("/assets/{filename}")
-async def assets(filename: str):
-    path = ASSETS_DIR / filename
-    if not path.exists():
-        raise HTTPException(404, "Not found")
-    return FileResponse(path)
-
 
 @app.post("/api/scan")
 async def scan(photo: UploadFile = File(...), species: str = Form("goldfish"), db: Session = Depends(get_db)):
@@ -344,11 +325,6 @@ async def ws_wall(websocket: WebSocket):
             await websocket.receive_text()
     except WebSocketDisconnect:
         manager.disconnect(websocket)
-
-
-# Serve scanner.js / wall.js / style.css etc.
-app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
-
 
 @app.get("/")
 async def root():
