@@ -216,3 +216,14 @@ __marimo__/
 .streamlit/secrets.toml
 
 .idea/
+
+# Custom project files
+ocean.db
+*.db
+generated/
+# *.pt      # Раскомментируй, если в model/ лежат тяжелые веса
+# *.onnx
+
+# OS generated files
+.DS_Store
+Thumbs.db
